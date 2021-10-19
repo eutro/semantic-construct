@@ -1,0 +1,27 @@
+#sprites {
+    display: none;
+}
+
+body {
+    margin: 0;
+}
+
+#canvas-holder {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+#canvas {
+    position: relative;
+    display: block;
+    margin: auto;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
