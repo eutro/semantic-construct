@@ -89,8 +89,18 @@
        (filter :stack)
        (mapcat #(consume atn % sym))))
 
-(defn pparse [atn syms]
-  (reduce (partial advance atn) (start atn) syms))
+(defn reduce-advance [atn]
+  (fn
+    ([] (start atn))
+    ([states] states)
+    ([states sym]
+     (if (seq states)
+       (advance atn states sym)
+       (reduced nil)))))
+
+(defn pparse
+  ([atn syms] (pparse atn (start atn) syms))
+  ([atn states syms] (reduce (reduce-advance atn) states syms)))
 
 (defn finish-parse [states]
   (->> states
