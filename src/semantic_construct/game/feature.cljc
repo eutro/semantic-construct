@@ -1,87 +1,19 @@
-(ns semantic-construct.game.objects
-  "Contains all the objects that exist in a game."
-  (:require #?(:cljs [semantic-construct.game.objects :refer-macros [defobject]])
-            [semantic-construct.parser.sentence :as sentence]
-            [semantic-construct.parser.evaluator :as ev]
-            [clojure.set :as set]))
+(ns semantic-construct.game.feature
+  (:require #?(:cljs [semantic-construct.game.feature :refer-macros [deffeature]])
+            [semantic-construct.parser.sentence :as stc]
+            [clojure.set :as set]
+            [semantic-construct.parser.evaluator :as ev]))
 
-(defrecord Game [objects properties])
-(defrecord GameObject [name atn defs])
+(defrecord Feature [name atn defs])
 
-(def conj-or-ss
-  (fnil conj (sorted-set)))
-
-(defn assoc-props [game id props+values]
-  (when-not (contains? (:objects game) id)
-    (throw (ex-info "Object with id does not exist" {:game game, :id id})))
-  (update
-   game :properties
-   (fn [props]
-     (reduce
-      (fn [props [prop value]]
-        (let [id-to-props (:id-to-props props)
-              existing-pair (some-> id-to-props (get id) (find prop))
-              new-pair [prop value]]
-          (if (= new-pair existing-pair)
-            props
-            (let [props
-                  (if value
-                    (-> props
-                        (update :id-to-props update id assoc prop value)
-                        (update :prop-pair-to-ids update new-pair conj-or-ss id))
-                    (-> props
-                        (update :id-to-props dissoc id)
-                        (update :props-to-ids update prop disj id)))
-                  props
-                  (if existing-pair
-                    (update props :prop-pair-to-ids update existing-pair disj id)
-                    (update props :prop-to-ids update prop conj-or-ss id))]
-              props))))
-      props
-      props+values))))
-
-(defn conj-object [game props]
-  (let [id (if-let [hi-id (first (rseq (:objects game)))]
-             (inc' hi-id)
-             0)
-        game (update game :objects conj id)
-        game (assoc-props game id props)]
-    game))
-
-(defn new-game [& objects]
-  (reduce conj-object
-          (map->Game
-           {:objects (sorted-set) ;; set of ids
-            :properties {:id-to-props (sorted-map)
-                         :prop-to-ids (sorted-map)
-                         :prop-pair-to-ids (sorted-map)}})
-          objects))
-
-(comment
-  (new-game
-   {:type :word, :value "there", :rule 11, :index 0}
-   {:type :word, :value "is", :rule 11, :index 1}
-   {:type :word, :value "a", :rule 11, :index 2}
-   {:type :word, :value "button", :rule 11, :index 3}
-   {:type :word, :value "when", :rule 12, :index 0}
-   {:type :word, :value "the", :rule 12, :index 1}
-   {:type :word, :value "button", :rule 12, :index 2}
-   {:type :word, :value "is", :rule 12, :index 3}
-   {:type :word, :value "pressed", :rule 12, :index 4}
-   {:type :word, :value ",", :rule 12, :index 5}
-   {:type :word, :value "win", :rule 12, :index 6}
-   {:type :rule}
-   {:type :rule})
-  )
-
-(defmacro defobject [name & {:as body}]
+(defmacro deffeature [name & {:as body}]
   `(def ~name
-     (map->GameObject
+     (map->Feature
       ~(merge
         body
         {:name `'~name}))))
 
-(defobject Natural
+(deffeature Natural
   ;; you complain about French numbers but then you have this abomination...
   :atn
   '{:ZERO {:s {:trans {"zero" [:pop 0]}}}
@@ -134,17 +66,17 @@
 
 (comment
   (semantic-construct.parser.atn/parse-and-suggest
-   (merge {:s (sentence/sentence->atn-layer '[[:let n :NATURAL]] '(:n reg))}
+   (merge {:s (stc/sentence->atn-layer '[[:let n :NATURAL]] '(:n reg))}
           (:atn Natural))
    ["four" "hundred" "and" "twenty" "five"]))
 
-(defobject Button
+(deffeature Button
   :defs
   {'THING-THAT-EXISTS [merge {"button"
                               {:default-props
                                {:type :button}}}]})
 
-(defobject TheGame
+(deffeature TheGame
   :atn
   {:s '{:s {:cats [[:RULES :e (assoc reg :val {:type :rule, :rule it})]]}
         :e {:pop (:val reg)}}
@@ -204,7 +136,7 @@
 
    :ACTION
    '{:s {:trans {"is" [:is reg]}}
-     :is {:trans {"clicked" [:pop {:type :click
+     :is {:trans {"pressed" [:pop {:type :click
                                    :receiver (:refd reg)}]}}}
 
    :THING-THAT-CAN-HAPPEN
@@ -214,18 +146,6 @@
 
    :ACTION-THAT-CAN-BE-DONE
    '{:s {:trans {"win" [:pop {:type :win}]}}}})
-
-(comment
-  (let [[atn vars] (atn-and-vars TheGame Button)]
-    (binding [ev/*mapped-syms*
-              (merge ev/*mapped-syms*
-                     vars
-                     {'GAME (new-game {:type :button})})]
-      (semantic-construct.parser.atn/parse-and-suggest
-       atn
-       ;;["when" "the" "button" "is" "clicked" "," "win"]
-       ["there" "is" "a" "button"])))
-  )
 
 (defn merge-vars [vars defs]
   (reduce (fn [vars [key [merge-fn value]]]
@@ -239,31 +159,14 @@
   [(apply merge (map :atn objects))
    (persistent! (reduce merge-vars (transient {}) (map :defs objects)))])
 
-(defn apply-rule [game rule]
-  ((:aply rule) game))
-
-(defn unapply-rule [game rule]
-  ((:unapply rule) game))
-
-(defn update-rules [{old-rules :rules
-                     :as old-game}
-                    {new-rules :rules
-                     :as new-game}]
-  (cond
-    (identical? old-rules new-rules)
-    new-game
-
-    :else
-    (let [added-rules (set/difference new-rules old-rules)
-          removed-rules (set/difference old-rules new-rules)]
-      (as-> new-game $
-        (reduce unapply-rule $ removed-rules)
-        (reduce apply-rule $ added-rules)))))
-
-(defn act [game action payload]
-  (update-rules
-   game
-   (reduce (fn [game listener]
-             (listener game action payload))
-           game
-           (get-in game [:events action]))))
+(comment
+  (let [[atn vars] (atn-and-vars TheGame Button)]
+    (binding [ev/*mapped-syms*
+              (merge ev/*mapped-syms*
+                     vars
+                     {'GAME (semantic-construct.game.state/new-game {:type :button})})]
+      (semantic-construct.parser.atn/parse-and-suggest
+       atn
+       ;;["when" "the" "button" "is" "clicked" "," "win"]
+       ["there" "is" "a" "button"])))
+  )
