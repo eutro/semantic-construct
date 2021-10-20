@@ -6,9 +6,20 @@
       (ev/eval-action guard {'reg reg})))
 
 (declare ^:private popped)
+
+(defn- get-node [atn net node reg]
+  (let [raw-node (get-in atn [net node])]
+    (when-not raw-node
+      (throw (ex-info "Node does not exist"
+                      {:net net
+                       :node node})))
+    (if-let [dyn (:dyn raw-node)]
+      (merge raw-node (ev/eval-action dyn {'reg reg}))
+      raw-node)))
+
 (defn- epsilons [atn state]
   (let [{[{:keys [net node cont reg], :as frame} & tail] :stack, :as state} state
-        node (get-in atn [net node])]
+        node (get-node atn net node reg)]
     (apply
      concat
      (when (:trans node) [state])
@@ -53,7 +64,7 @@
 
 (defn- consume [atn state sym]
   (let [{[{:keys [net node reg], :as frame} & tail] :stack} state
-        trans (get-in atn [net node :trans])]
+        trans (:trans (get-node atn net node reg))]
     (when-let [got (get trans sym)]
       (if (set? trans)
         (popped atn state sym)
@@ -93,7 +104,7 @@
   (->> states
        (filter :stack)
        (mapcat (fn [{[{:keys [net node reg]}] :stack}]
-                 (let [trans (get-in atn [net node :trans])]
+                 (let [trans (:trans (get-node atn net node reg))]
                    (if (set? trans)
                      (seq trans)
                      (into nil
