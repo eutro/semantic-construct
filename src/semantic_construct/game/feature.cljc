@@ -146,27 +146,3 @@
 
    :ACTION-THAT-CAN-BE-DONE
    '{:s {:trans {"win" [:pop {:type :win}]}}}})
-
-(defn merge-vars [vars defs]
-  (reduce (fn [vars [key [merge-fn value]]]
-            (if-let [old-val (get vars key)]
-              (assoc! vars key (merge-fn old-val value))
-              (assoc! vars key value)))
-          vars
-          defs))
-
-(defn atn-and-vars [& objects]
-  [(apply merge (map :atn objects))
-   (persistent! (reduce merge-vars (transient {}) (map :defs objects)))])
-
-(comment
-  (let [[atn vars] (atn-and-vars TheGame Button)]
-    (binding [ev/*mapped-syms*
-              (merge ev/*mapped-syms*
-                     vars
-                     {'GAME (semantic-construct.game.state/new-game {:type :button})})]
-      (semantic-construct.parser.atn/parse-and-suggest
-       atn
-       ;;["when" "the" "button" "is" "clicked" "," "win"]
-       ["there" "is" "a" "button"])))
-  )
