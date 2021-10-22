@@ -9,7 +9,7 @@
    :game
    {:rule {:word-colour "#ffffff"
            :rule-colour "#ff0000"
-           :font "20px sans"}
+           :font "40px sans"}
     :button {:colour "#ff0000"}
     :victory {:colour "#ffff00"
               :font "40px sans"}}})

@@ -201,20 +201,79 @@
   (when (-> @state/state :screen :just-moved)
     (swap! state/state update :screen dissoc :just-moved)))
 
+(defn square [x]
+  (* x x))
+
+(defn eucl-sq [& xs]
+  (transduce (map square) + xs))
+
 (defn on-up [evt]
   (when-some [{:keys [sx sy id]} (-> @state/state :screen :held)]
-    (swap! state/state update :screen dissoc :held)))
+    (swap! state/state update :screen dissoc :held)
+    (when (-> @state/state :screen :just-moved)
+      (->
+       (let [game (-> @state/state :screen :level :game)
+             game (eng/dispatch-event game :move {:target id})
+             id-to-props (-> game :properties :id-to-props)
+             props (id-to-props id)
+             scene (-> @state/state :screen :scene)]
+         (cond
+           (not (= :word (:type props))) game
+
+           (:rule props)
+           (let [dist-sq (apply eucl-sq (map - [sx sy] (fit-pos (pos-for! (atom game) id))))]
+             (if (<= 400 dist-sq)
+               ;; pop from the rule
+               (let [game (game/assoc-props game id {:rule nil, :index nil})
+                     rule-id (:rule props)
+                     left-in-rule (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
+                     game (if (= (count left-in-rule) (:index props))
+                            game ;; only the last word taken off, no need to shuffle
+                            (transduce ;; move all the existing words around
+                             (map-indexed vector)
+                             (completing
+                              (fn [game [i id]]
+                                (game/assoc-props game id {:index i})))
+                             game
+                             (sort-by (comp :index id-to-props) left-in-rule)))]
+                 game)
+               game))
+
+           ;; maybe added to rule
+           :else
+           (let [this-bb (:bb @(first (filter (comp #{id} :id) (:objects scene))))]
+             (if-let [[rule-id]
+                      (seq
+                       (eduction
+                        (filter :id)
+                        (filter (comp #{:rule} :type id-to-props :id))
+                        (filter #(r/bb-intersects? this-bb (:bb @%)))
+                        (map :id)
+                        (:objects scene)))]
+               (game/assoc-props
+                game
+                id
+                {:rule rule-id
+                 :index (-> game
+                            :properties
+                            :prop-pair-to-ids
+                            (get [:rule rule-id])
+                            count)})
+               game))))
+       (->> (swap! state/state assoc-in [:screen :level :game])))
+      (check-changes!)
+      (screen/redraw))))
 
 (defn on-move [evt]
   (let [dx (.-movementX evt)
         dy (.-movementY evt)]
-    (when (<= 10 (+ (* dx dx) (* dy dy)))
+    (when (<= 100 (eucl-sq dx dy))
       (when-some [{:keys [id ox oy]} (-> @state/state :screen :held)]
         (swap! state/state update-in [:screen :level :game]
                set-pos id (unfit-pos (mapv + @mouse/mouse [ox oy])))
         (swap! state/state update :screen assoc :just-moved id)
         (set-scene!)
-        (screen/draw-screen)))))
+        (screen/redraw)))))
 
 (defn level-state [id]
   (let [level (load-level id)]

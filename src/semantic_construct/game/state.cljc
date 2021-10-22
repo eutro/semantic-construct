@@ -38,7 +38,7 @@
                         (update :id-to-props update id assoc prop value)
                         (update :prop-pair-to-ids update new-pair conj-or-ss id))
                     (-> props
-                        (update :id-to-props dissoc id)
+                        (update :id-to-props update id dissoc prop)
                         (update :props-to-ids update prop disj id)))
                   props
                   (if existing-pair
