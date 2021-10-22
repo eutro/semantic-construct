@@ -46,6 +46,13 @@
 (defn gen-pos []
   (Math/round (rand 160000)))
 
+(defn unfit-pos [[x y]]
+  (let [unfit (fn [v cap]
+                (- v (/ cap 16)))
+        w (.-width r/canvas)
+        h (.-height r/canvas)]
+    [(unfit x w) (unfit y h)]))
+
 (defn fit-pos [pos]
   (let [factor (/ 3 4)
         fit (fn [v cap]
@@ -167,12 +174,38 @@
                 clicked)))
       (set-scene!))))
 
+(defn on-down [evt]
+  (when-some [[{id :id, :as obj}]
+              (eduction
+               (filter :id)
+               (-> @state/state :screen :scene r/under-mouse))]
+    (swap! state/state update :screen assoc :held
+           (let [[dx dy] (map -
+                              (-> @state/state :screen :level :game atom
+                                  (pos-for! id)
+                                  fit-pos)
+                              @mouse/mouse)]
+             {:id id, :dx dx, :dy dy}))))
+
+(defn on-up [evt]
+  (swap! state/state update :screen dissoc :held))
+
+(defn on-move [evt]
+  (when-some [{:keys [id dx dy]} (-> @state/state :screen :held)]
+    (swap! state/state update-in [:screen :level :game]
+           set-pos id (unfit-pos (mapv + @mouse/mouse [dx dy])))
+    (set-scene!)
+    (screen/redraw)))
+
 (defn level-state [id]
   (let [level (load-level id)]
     {:screen {:type :level
               :level level}
      :listeners {:resize [set-scene!]
-                 :click [on-click]}}))
+                 :click [on-click]
+                 :mousedown [on-down]
+                 :mouseup [on-up]
+                 :mousemove [on-move]}}))
 
 (defmethod screen/draw-screen :load-level
   [{{:keys [id]} :screen}]
