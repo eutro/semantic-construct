@@ -23,8 +23,7 @@
                 ;; The presence of a :figwheel configuration here
                 ;; will cause figwheel to inject the figwheel client
                 ;; into your build
-                :figwheel {:on-jsload "semantic-construct.core/on-js-reload"
-                           ;; :open-urls will pop open your application
+                :figwheel {;; :open-urls will pop open your application
                            ;; in the default browser once Figwheel has
                            ;; started and compiled your application.
                            ;; Comment this out once it no longer serves you.
@@ -35,6 +34,7 @@
                            :output-to "resources/public/js/compiled/semantic_construct.js"
                            :output-dir "resources/public/js/compiled/out"
                            :source-map-timestamp true
+                           :source-map true
                            ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
                            ;; https://github.com/binaryage/cljs-devtools
                            :preloads [devtools.preload]}}

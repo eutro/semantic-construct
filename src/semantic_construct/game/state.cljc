@@ -50,7 +50,7 @@
 
 (defn conj-object-for-id [game props]
   (let [id (if-let [hi-id (first (rseq (:objects game)))]
-             (inc' hi-id)
+             (inc hi-id)
              0)
         game (update game :objects conj id)
         game (assoc-props game id props)]

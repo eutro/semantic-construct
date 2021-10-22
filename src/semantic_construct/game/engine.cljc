@@ -1,6 +1,6 @@
 (ns semantic-construct.game.engine
-  (:require #?(:cljs [semantic-construct.game.engine :refer-macros [with-engine]])
-            [semantic-construct.parser.evaluator :as ev]
+  #?(:cljs (:require-macros [semantic-construct.game.engine :refer [with-engine]]))
+  (:require [semantic-construct.parser.evaluator :as ev]
             [semantic-construct.parser.atn :as atn]
             [semantic-construct.game.feature :as f]
             [semantic-construct.game.state :as s]
