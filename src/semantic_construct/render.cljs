@@ -107,19 +107,17 @@
      (let [text-metrics (.measureText ctx text)
            bb
            (->BB
-            0
-            0
-            (+ (js/Math.abs (.-actualBoundingBoxLeft text-metrics))
-               (js/Math.abs (.-actualBoundingBoxRight text-metrics)))
-            (+ (js/Math.abs (.-actualBoundingBoxAscent text-metrics))
-               (js/Math.abs (.-actualBoundingBoxDescent text-metrics))))]
+            (- (Math/abs (.-actualBoundingBoxLeft text-metrics)))
+            (- (Math/abs (.-actualBoundingBoxAscent text-metrics)))
+            (Math/abs (.-actualBoundingBoxRight text-metrics))
+            (Math/abs (.-actualBoundingBoxDescent text-metrics)))]
         (->InCtxRenderObject
          bb
          (js/DOMMatrix.)
          (fn [{:keys [mat]}]
            (.save ctx)
            (.setTransform ctx mat)
-           (.fillText ctx text 0 (:maxy bb))
+           (.fillText ctx text 0 0)
            (.restore ctx)))))))
 
 (defn merge-bbs [& bbs]

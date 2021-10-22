@@ -19,7 +19,7 @@
       (r/obj-with-bindings
        :font "20px sans"
        :fillStyle "white")
-      (r/transform (r/translation 10 10))))
+      (r/transform (r/translation 10 30))))
 
 (def levels
   [(let [engine
@@ -44,16 +44,19 @@
   (nth levels id))
 
 (defn gen-pos []
-  (Math/round (rand 1600000)))
+  (Math/round (rand 160000)))
 
 (defn fit-pos [pos]
   (let [factor (/ 3 4)
+        fit (fn [v cap]
+              (+ (/ cap 16) (rem v (* factor cap))))
         w (.-width r/canvas)
         h (.-height r/canvas)
-        nx (+ (/ w 16) (mod pos (* factor w)))
-        loops-around (quot pos (* factor))
-        ny (+ (/ h 16) (mod (* loops-around 20) (* factor h)))]
-    [nx ny]))
+        [x y] (if (vector? pos)
+                pos
+                [pos (* 10 (quot pos (* factor w)))])
+        [x y] [(fit x w) (fit y h)]]
+    [x y]))
 
 (defn set-pos [game id pos]
   (assoc-in game [:properties :intrinsics id :pos] pos))
@@ -72,21 +75,21 @@
      (case (:type props)
        :button (-> (r/rect #(r/->BB 0 0 100 100))
                    (r/obj-with-bindings
-                    :fillStyle "red"))
+                    :fillStyle (-> theme/theme :game :button :colour)))
        :word (-> (r/text (:value props))
                  (r/obj-with-bindings
-                  :font "20px sans"
-                  :fillStyle "white"))
+                  :font (-> theme/theme :game :rule :font)
+                  :fillStyle (-> theme/theme :game :rule :word-colour)))
        :rule (-> (r/text ";")
                  (r/obj-with-bindings
-                  :font "20px sans"
-                  :fillStyle "red"))
+                  :font (-> theme/theme :game :rule :font)
+                  :fillStyle (-> theme/theme :game :rule :rule-colour)))
        :victory (-> (r/text (if (:had props)
                               "victory (had)"
                               "victory (not yet had)"))
                     (r/obj-with-bindings
-                     :font "40px sans"
-                     :fillStyle "yellow"))
+                     :font (-> theme/theme :game :victory :font)
+                     :fillStyle (-> theme/theme :game :victory :colour)))
 
        (throw (ex-info "No renderer for type" {:type (:type props)})))
      translate-to-pos
@@ -95,33 +98,36 @@
 (defn text-width [text]
   (-> r/ctx (.measureText text) .-width))
 
+(def no-space? (partial contains? #{nil "," ":" ";"}))
+
 (defn place-rules [game]
-  (reduce
-   (fn [game rule-id]
-     (let [{:keys [last-words word-ids]
-            :as rule-intrinsics}
-           (-> game :properties :intrinsics (get rule-id))
-           widths (map text-width last-words)
-           gap-width 0
-           *game (atom game)
-           word-poses
-           (next
-            (reverse
-             (reductions
-              -
-              (pos-for! *game rule-id)
-              (eduction (interpose gap-width)
-                        (partition-all 2)
-                        (map (partial apply +))
-                        (reverse widths)))))
-           game @*game]
-       (reduce
-        (fn [game [pos word-id]]
-          (set-pos game word-id pos))
-        game
-        (map vector word-poses word-ids))))
-   game
-   (-> game :properties :prop-pair-to-ids (get [:type :rule]))))
+  (let [counter (atom 0)]
+    (reduce
+     (fn [game rule-id]
+       (r/with-ctx-bindings [font (-> theme/theme :game :rule :font)]
+         (let [{:keys [last-words word-ids]
+                :as rule-intrinsics}
+               (-> game :properties :intrinsics (get rule-id))
+               gap-width (text-width " ")
+               widths ((fn widths [words]
+                         (lazy-seq
+                          (when (seq words)
+                            (cons
+                             (+ (text-width (first words))
+                                (if (no-space? (second words)) 0 gap-width))
+                             (widths (next words))))))
+                       last-words)
+               *game (atom game)
+               word-poses (reductions + 0 widths)
+               y (* 50 (swap! counter inc))
+               game @*game]
+           (reduce
+            (fn [game [x id]]
+              (set-pos game id [x y]))
+            game
+            (map vector word-poses (concat word-ids [rule-id]))))))
+     game
+     (-> game :properties :prop-pair-to-ids (get [:type :rule])))))
 
 (defn set-scene! []
   (let [{:keys [base-scene game]
