@@ -43,8 +43,8 @@
                              (reset! state/state {:screen {:type :load-level, :id 0}})
                              (screen/redraw))
                            20
-                           20)
-              (menu-button "Source Code" open-source 120 120)])}
+                           70)
+              (menu-button "Source Code" open-source 120 170)])}
    :listeners {:click [on-click]}})
 
 (defmethod screen/draw-screen :load [_]
