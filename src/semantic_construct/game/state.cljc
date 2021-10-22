@@ -59,6 +59,13 @@
 (defn conj-object [game props]
   (first (conj-object-for-id game props)))
 
+(defn disj-object [game id]
+  (-> game
+      (assoc-props id (into {}
+                            (map (fn [[k v]] [k nil]))
+                            (-> game :properties :id-to-props (get id))))
+      (update :objects disj id)))
+
 (defn new-game
   "Creates a new GameState with the given init objects.
 
