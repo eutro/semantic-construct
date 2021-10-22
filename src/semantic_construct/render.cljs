@@ -11,6 +11,9 @@
 ;; just don't mutate it, okay?
 (def identity-matrix (js/DOMMatrix.))
 
+(defn translation [dx dy]
+  (-> (js/DOMMatrix.) (.translateSelf dx dy)))
+
 (defrecord BB [minx miny maxx maxy]
   Transform
   (transform [this mat]

@@ -30,5 +30,6 @@
     (resize-canvas-to-window)
     (js/window.addEventListener "resize" resize-canvas-to-window false)
     (add-event-dispatcher "click")
+    (add-event-dispatcher "resize")
     (js/window.requestAnimationFrame animate)
     true))
