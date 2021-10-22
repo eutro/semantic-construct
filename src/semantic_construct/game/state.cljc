@@ -39,7 +39,7 @@
                         (update :prop-pair-to-ids update new-pair conj-or-ss id))
                     (-> props
                         (update :id-to-props update id dissoc prop)
-                        (update :props-to-ids update prop disj id)))
+                        (update :prop-to-ids update prop disj id)))
                   props
                   (if existing-pair
                     (update props :prop-pair-to-ids update existing-pair disj id)
@@ -64,7 +64,8 @@
       (assoc-props id (into {}
                             (map (fn [[k v]] [k nil]))
                             (-> game :properties :id-to-props (get id))))
-      (update :objects disj id)))
+      (update :objects disj id)
+      (update-in [:properties :id-to-props] dissoc id)))
 
 (defn new-game
   "Creates a new GameState with the given init objects.
