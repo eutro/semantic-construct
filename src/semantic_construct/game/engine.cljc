@@ -62,46 +62,58 @@
 
         :else (throw (ex-info "Unrecognised parse" {:parse single-parse}))))))
 
+(defn rule->word-ids [game rule-id]
+  (let [rule-words-unsorted (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
+        get-props (-> game :properties :id-to-props)
+        word-ids (vec (sort-by (comp :index get-props) rule-words-unsorted))]
+    word-ids))
+
 (defn reparse-rules [game atn]
   (let [rule-ids
         (-> game
             :properties
             :prop-pair-to-ids
-            (get [:type :rule]))]
-    (reduce
-     (fn [game rule-id]
-       (let [{:keys [last-words last-pparse unapply]
-              :as rule-intrinsics}
-             (-> game :properties :intrinsics (get rule-id))
-             rule-words-unsorted
-             (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
-             get-props (partial get (-> game :properties :id-to-props))
-             word-ids (vec (sort-by (comp :index get-props) rule-words-unsorted))
-             rule-words (mapv (comp :value get-props) word-ids)]
-         (if (= last-words rule-words)
-           game ;; no reparse needed
-           (let [last-len (count last-words)
-                 curr-len (count rule-words)
-                 game ((or unapply identity) game)
-                 new-pparse
-                 (binding [ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME game)]
-                   (if (and last-pparse
-                            (> curr-len last-len)
-                            (every? identity (map = last-words rule-words)))
-                     (atn/pparse atn last-pparse (subvec rule-words last-len))
-                     (atn/pparse atn rule-words)))
-                 apply-rule (parse->apply (atn/finish-parse new-pparse))
-                 [unapply-rule game] (if apply-rule (apply-rule game) [nil game])
-                 game (assoc-in game
-                                [:properties :intrinsics rule-id]
-                                (assoc rule-intrinsics
-                                       :last-words rule-words
-                                       :word-ids word-ids
-                                       :last-pparse new-pparse
-                                       :unapply unapply-rule))]
-             game))))
-     game
-     rule-ids)))
+            (get [:type :rule]))
+        get-props (-> game :properties :id-to-props)
+        unchanged (every? (partial apply =)
+                          (map
+                           (juxt
+                            (comp :last-words (-> game :properties :intrinsics))
+                            (comp (partial mapv (comp :value get-props))
+                                  (partial rule->word-ids game)))
+                           rule-ids))]
+    (if unchanged
+      game
+      (let [game
+            (reduce ;; unapply all in reverse order first
+             (fn [game rule-id]
+               ((-> game :properties :intrinsics
+                    (get rule-id) :unapply (or identity))
+                game))
+             game (reverse rule-ids))
+            game
+            (reduce
+             (fn [game rule-id]
+               (let [{:keys [last-words last-pparse unapply] :as rule-intrinsics}
+                     (-> game :properties :intrinsics (get rule-id))
+                     word-ids (rule->word-ids game rule-id)
+                     rule-words (mapv (comp :value get-props) word-ids)
+                     new-pparse
+                     (binding [ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME game)]
+                       (atn/pparse atn rule-words))
+                     apply-rule (parse->apply (atn/finish-parse new-pparse))
+                     [unapply-rule game] (if apply-rule (apply-rule game) [nil game])
+                     game (assoc-in game
+                                    [:properties :intrinsics rule-id]
+                                    (assoc rule-intrinsics
+                                           :last-words rule-words
+                                           :word-ids word-ids
+                                           :last-pparse new-pparse
+                                           :unapply unapply-rule))]
+                 game))
+             game
+             rule-ids)]
+        game))))
 
 (defn dispatch-event [game event payload]
   (reduce (fn [game listener] (listener game payload))
@@ -148,5 +160,8 @@
           (s/add-init-rules ["there" "is" "a" "button"]
                             ["when" "the" "button" "is" "pressed" "," "win"])
           (on-change engine)
+          (s/disj-object 3)
+          (on-change engine)
           (dispatch-event :click {:target 13}))))
+  ;
   )
