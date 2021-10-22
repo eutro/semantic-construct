@@ -38,7 +38,7 @@
        (update base-scene
                :objects
                into
-               [(textbox "Do you see those? Those words over there.")])}))])
+               [])}))])
 
 (defn load-level [id]
   (nth levels id))
@@ -127,10 +127,13 @@
                *game (atom game)
                word-poses (reductions + 0 widths)
                y (* 50 (swap! counter inc))
+               held (-> @state/state :screen :held :id)
                game @*game]
            (reduce
             (fn [game [x id]]
-              (set-pos game id [x y]))
+              (if (= held id)
+                game
+                (set-pos game id [x y])))
             game
             (map vector word-poses (concat word-ids [rule-id]))))))
      game
@@ -156,6 +159,13 @@
            :scene scene
            :level (assoc level :game @*game))))
 
+(defn level-changes [level]
+  (update level :game eng/on-change (:engine level)))
+
+(defn check-changes! []
+  (swap! state/state update-in [:screen :level] level-changes)
+  (set-scene!))
+
 (defn on-click [evt]
   (let [clicked
         (into (sorted-set)
@@ -170,11 +180,10 @@
              (fn [game]
                (reduce
                 (fn [game id]
-                  ()
                   (eng/dispatch-event game :click {:target id}))
                 game
                 clicked)))
-      (set-scene!))))
+      (check-changes!))))
 
 (defn on-down [evt]
   (when-some [[{id :id, :as obj}]
@@ -182,25 +191,30 @@
                (filter :id)
                (-> @state/state :screen :scene r/under-mouse))]
     (swap! state/state update :screen assoc :held
-           (let [[dx dy] (map -
+           (let [[ox oy] (map -
                               (-> @state/state :screen :level :game atom
                                   (pos-for! id)
                                   fit-pos)
-                              @mouse/mouse)]
-             {:id id, :dx dx, :dy dy})))
+                              @mouse/mouse)
+                 [sx sy] @mouse/mouse]
+             {:id id, :ox ox, :oy oy, :sx sx, :sy sy})))
   (when (-> @state/state :screen :just-moved)
     (swap! state/state update :screen dissoc :just-moved)))
 
 (defn on-up [evt]
-  (swap! state/state update :screen dissoc :held))
+  (when-some [{:keys [sx sy id]} (-> @state/state :screen :held)]
+    (swap! state/state update :screen dissoc :held)))
 
 (defn on-move [evt]
-  (when-some [{:keys [id dx dy]} (-> @state/state :screen :held)]
-    (swap! state/state update-in [:screen :level :game]
-           set-pos id (unfit-pos (mapv + @mouse/mouse [dx dy])))
-    (swap! state/state update :screen assoc :just-moved id)
-    (set-scene!)
-    (screen/redraw)))
+  (let [dx (.-movementX evt)
+        dy (.-movementY evt)]
+    (when (<= 10 (+ (* dx dx) (* dy dy)))
+      (when-some [{:keys [id ox oy]} (-> @state/state :screen :held)]
+        (swap! state/state update-in [:screen :level :game]
+               set-pos id (unfit-pos (mapv + @mouse/mouse [ox oy])))
+        (swap! state/state update :screen assoc :just-moved id)
+        (set-scene!)
+        (screen/draw-screen)))))
 
 (defn level-state [id]
   (let [level (load-level id)]
