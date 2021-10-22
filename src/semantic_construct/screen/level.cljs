@@ -162,13 +162,15 @@
               (comp
                (map :id)
                (filter identity))
-              (-> @state/state :screen :scene r/under-mouse))]
+              (-> @state/state :screen :scene r/under-mouse))
+        clicked (disj clicked (-> @state/state :screen :just-moved))]
     (when (seq clicked)
       (swap! state/state update-in
              [:screen :level :game]
              (fn [game]
                (reduce
                 (fn [game id]
+                  ()
                   (eng/dispatch-event game :click {:target id}))
                 game
                 clicked)))
@@ -185,7 +187,9 @@
                                   (pos-for! id)
                                   fit-pos)
                               @mouse/mouse)]
-             {:id id, :dx dx, :dy dy}))))
+             {:id id, :dx dx, :dy dy})))
+  (when (-> @state/state :screen :just-moved)
+    (swap! state/state update :screen dissoc :just-moved)))
 
 (defn on-up [evt]
   (swap! state/state update :screen dissoc :held))
@@ -194,6 +198,7 @@
   (when-some [{:keys [id dx dy]} (-> @state/state :screen :held)]
     (swap! state/state update-in [:screen :level :game]
            set-pos id (unfit-pos (mapv + @mouse/mouse [dx dy])))
+    (swap! state/state update :screen assoc :just-moved id)
     (set-scene!)
     (screen/redraw)))
 
