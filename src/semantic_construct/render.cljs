@@ -39,6 +39,21 @@
   (and (<= minx x maxx)
        (<= miny y maxy)))
 
+(defn lines-overlap? [amin amax bmin bmax]
+  (if (<= amin bmin)
+    (<= bmin amax)
+    (<= amin bmax)))
+
+(defn bb-intersects? [bba bbb]
+  (and (lines-overlap? (:minx bba) (:maxx bba) (:minx bbb) (:maxx bbb))
+       (lines-overlap? (:miny bba) (:maxy bba) (:miny bbb) (:maxy bbb))))
+
+(comment
+  (bb-intersects? (->BB 0 0 1 1)
+                  (->BB -1 -1 1 -1))
+  ;
+  )
+
 (defn under-mouse [scene]
   (let [[mx my] @mouse/mouse]
     (filter #(bb-contains? (:bb @%) mx my) (:objects scene))))
