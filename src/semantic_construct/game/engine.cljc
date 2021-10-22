@@ -77,10 +77,8 @@
              rule-words-unsorted
              (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
              get-props (partial get (-> game :properties :id-to-props))
-             rule-words
-             (into []
-                   (map (comp :value get-props))
-                   (sort-by (comp :index get-props) rule-words-unsorted))]
+             word-ids (vec (sort-by (comp :index get-props) rule-words-unsorted))
+             rule-words (mapv (comp :value get-props) word-ids)]
          (if (= last-words rule-words)
            game ;; no reparse needed
            (let [last-len (count last-words)
@@ -99,6 +97,7 @@
                                 [:properties :intrinsics rule-id]
                                 (assoc rule-intrinsics
                                        :last-words rule-words
+                                       :word-ids word-ids
                                        :last-pparse new-pparse
                                        :unapply unapply-rule))]
              game))))
