@@ -43,8 +43,7 @@
           {:type :add, :thing props}
           (fn [game]
             (let [[game id] (s/conj-object-for-id game props)]
-              [identity ;; deletion not yet implemented :)
-               game]))
+              [#(s/disj-object % id) game]))
 
           {:type :when, :event event, :action action}
           (let [action-fn (compile-action action)]
