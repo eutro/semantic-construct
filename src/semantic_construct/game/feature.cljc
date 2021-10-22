@@ -1,6 +1,6 @@
 (ns semantic-construct.game.feature
-  (:require #?(:cljs [semantic-construct.game.feature :refer-macros [deffeature]])
-            [semantic-construct.parser.sentence :as stc]
+  #?(:cljs (:require-macros [semantic-construct.game.feature :refer [deffeature]]))
+  (:require [semantic-construct.parser.sentence :as stc]
             [clojure.set :as set]
             [semantic-construct.parser.evaluator :as ev]))
 

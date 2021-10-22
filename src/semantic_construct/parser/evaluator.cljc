@@ -1,21 +1,18 @@
-(ns semantic-construct.parser.evaluator)
+(ns semantic-construct.parser.evaluator
+  (:refer-clojure :exclude [destructure])
+  #?(:cljs (:require-macros [semantic-construct.parser.evaluator :refer [var-map]]))
+  (:require [semantic-construct.parser.destructure :refer [destructure]]))
+
+(defmacro var-map [& syms]
+  (into {} (map (fn [sym] [`'~sym `#'~sym])) syms))
 
 (def ^:dynamic *mapped-syms*
   (merge
-   (select-keys
-    (ns-interns 'clojure.core)
-    '[assoc select-keys update conj reverse vec first next
-      cons = not= + * / - str zero? mod rem apply into map
-      comp partial count filter second merge list frequencies
-      get find vector vec name juxt])
-   `{clojure.core/nth ~#'nth
-     clojure.core/get ~#'get
-     clojure.core/first ~#'first
-     clojure.core/next ~#'next
-     clojure.core/seq ~#'seq
-     clojure.core/seq? ~#'seq?
-     clojure.lang.PersistentHashMap/create
-     ~#(clojure.lang.PersistentHashMap/create %)}
+   (var-map
+    assoc select-keys update conj reverse vec first next
+    cons = not= + * / - str zero? mod rem apply into map
+    comp partial count filter second merge list frequencies
+    get find vector vec name juxt nth seq seq? hash-map)
    {'dbg #(doto % prn)}))
 
 (defn eval-action
@@ -89,9 +86,13 @@
                  ())
 
                (symbol? form)
-               (if-let [[_ v] (find env form)]
+               (if-let [v (get env form)]
                  v
-                 (throw (ex-info "undefined variable" {:var form, :env env})))
+                 (throw (ex-info "undefined variable"
+                                 {:var form,
+                                  :env (try (persistent! env)
+                                            (catch #?(:cljs js/Object :clj Exception) e
+                                              env))})))
 
                (map? form)
                (into {} (map (partial mapv eval-form)) form)
@@ -105,3 +106,7 @@
                :else form)))
      (merge *mapped-syms* env))
     action)))
+
+(comment
+  (eval-action '(let [[x y z] (vec '{x 1 y 2 z 3})] x))
+  )

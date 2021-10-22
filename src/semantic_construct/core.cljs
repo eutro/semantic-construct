@@ -1,59 +1,34 @@
 (ns semantic-construct.core
-  (:require [cljs.core.async :as a :refer-macros [go]]))
+  (:require [cljs.core.async :as a :refer-macros [go]]
+            [semantic-construct.render :as r]
+            [semantic-construct.state :as state]
+            [semantic-construct.screen.screen :as scr]
+            [semantic-construct.screen.screens]))
 
-(def grid-size [8 6])
-(def tile-size 32)
+(defn resize-canvas-to-window []
+  (doto r/canvas
+    (-> .-width (set! js/window.innerWidth))
+    (-> .-height (set! js/window.innerHeight)))
+  (scr/redraw))
 
-(def canvas (. js/document (getElementById "canvas")))
-(doto canvas
-  (-> .-width (set! (* (grid-size 0) tile-size)))
-  (-> .-height (set! (* (grid-size 1) tile-size))))
+(defn animate []
+  (try
+    (scr/redraw)
+    (finally
+      (js/window.requestAnimationFrame animate))))
 
-(def ctx (. canvas (getContext "2d")))
-(def sprites (. js/document (getElementById "sprites")))
+(defn event-dispatcher [name]
+  (let [kw (keyword name)]
+    (fn [evt]
+      (run! #(% evt) (kw (:listeners @state/state))))))
 
-(def objects
-  {:tile {:sprite {:x 0, :y 0, :w tile-size, :h tile-size}}
-   :button {:sprite {:x (* tile-size 1), :y 0, :w tile-size, :h tile-size}}
-   :button-pressed {:sprite {:x (* tile-size 2), :y 0, :w tile-size, :h tile-size}}
-   :block {:sprite {:x (* tile-size 3), :y 0, :w tile-size, :h tile-size}}})
+(defn add-event-dispatcher [name]
+  (js/window.addEventListener name (event-dispatcher name)))
 
-(defn offset-sprite [sprite offset]
-  (let [{:keys [h]} sprite]
-    (update sprite :y + (* h offset))))
-
-(comment
-  (offset-sprite (-> objects :tile :sprite) 2))
-
-(def colour->offset
-  {:green 0, :red 1, :blue 2, :yellow 3})
-
-(defn colour-sprite [sprite colour]
-  (offset-sprite
-   sprite
-   (or (colour->offset colour)
-       (throw (ex-info "No such colour" {:colour colour})))))
-
-(comment
-  (colour-sprite (-> objects :tile :sprite) :yellow)
-  (colour-sprite (-> objects :tile :sprite) :brown))
-
-(defn object-sprite
-  ([object]
-   (-> objects
-       (get object)
-       (or (throw (ex-info "No such object" {:object object})))
-       :sprite))
-  ([object colour] (colour-sprite (object-sprite object) colour)))
-
-(defn draw-sprite [ctx sprite dx dy]
-  (let [{:keys [x y w h]} sprite]
-    (.drawImage ctx
-                sprites
-                x y
-                w h
-                dx dy
-                w h)))
-
-(comment
-  (draw-sprite ctx (object-sprite :button :red) 64 40))
+(defonce initialized
+  (do
+    (resize-canvas-to-window)
+    (js/window.addEventListener "resize" resize-canvas-to-window false)
+    (add-event-dispatcher "click")
+    (js/window.requestAnimationFrame animate)
+    true))
