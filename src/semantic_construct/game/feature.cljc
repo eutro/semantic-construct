@@ -77,6 +77,8 @@
                                {:type :button}}}]})
 
 (deffeature TheGame
+  :defs
+  {'THING-THAT-EXISTS [merge {}]}
   :atn
   {:s '{:s {:cats [[:RULES :e (assoc reg :val {:type :rule, :rule it})]]}
         :e {:pop (:val reg)}}
@@ -96,10 +98,13 @@
                :e {:pop {:type :add
                          :thing (:thing reg)}}}
    :WHEN
-   '{:s {:trans {"when" [:s1 reg]}}
+   '{:s {:trans {"when" [:s1 reg]}
+         :cats [[:ACTION-THAT-CAN-BE-DONE :p1 (assoc reg :action it)]]}
      :s1 {:cats [[:THING-THAT-CAN-HAPPEN :s2 (assoc reg :event it)]]}
      :s2 {:trans {"," [:s3 reg]}}
      :s3 {:cats [[:ACTION-THAT-CAN-BE-DONE :e (assoc reg :action it)]]}
+     :p1 {:trans {"when" [:p2 reg]}}
+     :p2 {:cats [[:THING-THAT-CAN-HAPPEN :e (assoc reg :event it)]]}
      :e {:pop {:type :when
                :event (:event reg)
                :action (:action reg)}}}
