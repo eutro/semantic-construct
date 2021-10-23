@@ -75,7 +75,8 @@
         pos)))
 
 (defn objects-for [*game id]
-  (let [props (-> @*game :properties :id-to-props (get id))
+  (let [id-to-props (-> @*game :properties :id-to-props)
+        props (id-to-props id)
         [x y] (fit-pos (pos-for! *game id))
         translate-to-pos (fn [obj] (r/transform obj (r/translation x y)))]
     (->
@@ -87,10 +88,19 @@
                  (r/obj-with-bindings
                   :font (-> theme/theme :game :rule :font)
                   :fillStyle (-> theme/theme :game :rule :word-colour)))
-       :rule (-> (r/text ";")
-                 (r/obj-with-bindings
-                  :font (-> theme/theme :game :rule :font)
-                  :fillStyle (-> theme/theme :game :rule :rule-colour)))
+       :rule (let [held (-> @state/state :screen :held :id)
+                   word (and held
+                             (-> held id-to-props :type (= :word))
+                             (-> held id-to-props :value))
+                   intrinsics (-> @*game :properties :intrinsics (get id))
+                   style (cond
+                           (not word) :rule-colour
+                           (contains? (:hints intrinsics) word) :hint-colour
+                           :else :nohint-colour)]
+               (-> (r/text (if (:applied intrinsics) ";" "..."))
+                   (r/obj-with-bindings
+                    :font (-> theme/theme :game :rule :font)
+                    :fillStyle (-> theme/theme :game :rule style))))
        :victory (-> (r/text (if (:had props)
                               "victory (had)"
                               "victory (not yet had)"))
@@ -243,23 +253,41 @@
              ;; maybe added to rule
              :else
              (let [this-bb (:bb @(first (filter (comp #{id} :id) (:objects scene))))]
-               (if-let [[rule-id]
-                        (seq
-                         (eduction
+               (if-let [{:keys [rule index]}
+                        (transduce
+                         (comp
                           (filter :id)
-                          (filter (comp #{:rule} :type id-to-props :id))
-                          (filter #(r/bb-intersects? this-bb (:bb @%)))
-                          (map :id)
-                          (:objects scene)))]
-                 (game/assoc-props
-                  game
-                  id
-                  {:rule rule-id
-                   :index (-> game
-                              :properties
-                              :prop-pair-to-ids
-                              (get [:rule rule-id])
-                              count)})
+                          (map (fn [{:keys [id] :as obj}]
+                                 (let [{:keys [type rule index]} (id-to-props id)]
+                                   (cond
+                                     (= :rule type)
+                                     {:obj obj, :rule id, :index ##Inf}
+                                     (and (= :word type) rule)
+                                     {:obj obj, :rule rule, :index index}
+                                     :else nil))))
+                          (filter identity)
+                          (filter #(r/bb-intersects? this-bb (-> % :obj deref :bb))))
+                         (completing
+                          (fn [x y]
+                            (cond
+                              (not x) y
+                              (not= (:rule x) (:rule y)) (min-key :rule x y)
+                              :else (max-key :index x y))))
+                         nil
+                         (:objects scene))]
+                 (let [in-rule (-> game :properties :prop-pair-to-ids (get [:rule rule]))
+                       game (game/assoc-props game id {:rule rule})
+                       target-index (if (infinite? index) (count in-rule) index)
+                       game (if (infinite? index)
+                              game
+                              (reduce (fn [game id]
+                                        (let [index (:index (id-to-props id))]
+                                          (if (>= index target-index)
+                                            (game/assoc-props game id {:index (inc index)})
+                                            game)))
+                                      game in-rule))
+                       game (game/assoc-props game id {:index target-index})]
+                   game)
                  game))))
          (->> (swap! state/state assoc-in [:screen :level :game])))
         (check-changes!)

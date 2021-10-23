@@ -94,23 +94,27 @@
             game
             (reduce
              (fn [game rule-id]
-               (let [{:keys [last-words last-pparse unapply] :as rule-intrinsics}
-                     (-> game :properties :intrinsics (get rule-id))
-                     word-ids (rule->word-ids game rule-id)
-                     rule-words (mapv (comp :value get-props) word-ids)
-                     new-pparse
-                     (binding [ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME game)]
-                       (atn/pparse atn rule-words))
-                     apply-rule (parse->apply (atn/finish-parse new-pparse))
-                     [unapply-rule game] (if apply-rule (apply-rule game) [nil game])
-                     game (assoc-in game
-                                    [:properties :intrinsics rule-id]
-                                    (assoc rule-intrinsics
-                                           :last-words rule-words
-                                           :word-ids word-ids
-                                           :last-pparse new-pparse
-                                           :unapply unapply-rule))]
-                 game))
+               (binding [ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME game)]
+                 (let [{:keys [last-words last-pparse unapply]
+                        :as rule-intrinsics}
+                       (-> game :properties :intrinsics (get rule-id))
+                       word-ids (rule->word-ids game rule-id)
+                       rule-words (mapv (comp :value get-props) word-ids)
+                       new-pparse (atn/pparse atn rule-words)
+                       hints (into #{} (atn/suggest atn new-pparse))
+                       apply-rule (parse->apply (atn/finish-parse new-pparse))
+                       [unapply-rule game] (if apply-rule (apply-rule game) [nil game])
+                       game (assoc-in
+                             game
+                             [:properties :intrinsics rule-id]
+                             (assoc rule-intrinsics
+                                    :last-words rule-words
+                                    :word-ids word-ids
+                                    :last-pparse new-pparse
+                                    :hints hints
+                                    :unapply unapply-rule
+                                    :applied (boolean apply-rule)))]
+                   game)))
              game
              rule-ids)]
         game))))
