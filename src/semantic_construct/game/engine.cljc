@@ -1,12 +1,9 @@
 (ns semantic-construct.game.engine
   #?(:cljs (:require-macros [semantic-construct.game.engine :refer [with-engine]]))
-  (:require [semantic-construct.parser.evaluator :as ev]
-            [semantic-construct.parser.atn :as atn]
+  (:require [semantic-construct.parser.atn :as atn]
             [semantic-construct.game.feature :as f]
             [semantic-construct.game.state :as s]
             [clojure.core.match :as m]))
-
-(def ^:dynamic *dynamic-game* nil)
 
 (defn compile-action
   "Compile an action from a parse into a function."
@@ -88,7 +85,7 @@
         (listener-apply
          :click
          (fn [game {evt-target :target}]
-           (if (binding [*dynamic-game* game]
+           (if (binding [f/*vars* (assoc f/*vars* :game game)]
                  (target evt-target))
              (action-fn game {:target evt-target})
              game)))
@@ -159,8 +156,7 @@
             game
             (reduce
              (fn [game [rule-id reapply]]
-               (binding [*dynamic-game* game
-                         ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME #'*dynamic-game*)]
+               (binding [f/*vars* (assoc f/*vars* :game game)]
                  (let [{:keys [last-words last-pparse unapply]
                         :as rule-intrinsics}
                        (-> game :properties :intrinsics (get rule-id))
@@ -189,19 +185,19 @@
             game (reduce normalise-rule-indices game rule-ids)]
         game))))
 
-(defn dispatch-event [game event payload]
-  (reduce (fn [game listener] (listener game payload))
-          game
-          (-> game :listeners (get event))))
-
 (defrecord Engine [atn vars])
 
 (defn call-with-engine [engine f]
-  (binding [ev/*mapped-syms* (:vars engine)]
+  (binding [f/*vars* (:vars engine)]
     (f)))
 
 (defmacro with-engine [engine & body]
   `(call-with-engine ~engine (fn [] ~@body)))
+
+(defn dispatch-event [game event payload]
+  (reduce (fn [game listener] (listener game payload))
+          game
+          (-> game :listeners (get event))))
 
 (defn on-change [game engine]
   (with-engine engine
@@ -224,7 +220,7 @@
            (transduce
             (map :defs)
             (completing merge-vars!)
-            (transient ev/*mapped-syms*)
+            (transient {})
             features))}))
 
 (comment
@@ -233,8 +229,6 @@
       (-> (s/new-game)
           (s/add-init-rules ["there" "is" "a" "button"]
                             ["when" "the" "button" "is" "pressed" "," "win"])
-          (on-change engine)
-          (s/disj-object 3)
           (on-change engine)
           (dispatch-event :click {:target 13}))))
   ;

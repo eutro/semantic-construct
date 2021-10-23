@@ -1,9 +1,7 @@
-(ns semantic-construct.parser.atn
-  (:require [semantic-construct.parser.evaluator :as ev]))
+(ns semantic-construct.parser.atn)
 
 (defn- check-guard [guard reg]
-  (or (nil? guard)
-      (ev/eval-action guard {'reg reg})))
+  (or (nil? guard) (guard reg)))
 
 (declare ^:private popped)
 
@@ -14,7 +12,7 @@
                       {:net net
                        :node node})))
     (if-let [dyn (:dyn raw-node)]
-      (merge raw-node (ev/eval-action dyn {'reg reg}))
+      (merge raw-node (dyn reg))
       raw-node)))
 
 (defn- epsilons [atn state]
@@ -24,7 +22,7 @@
      concat
      (when (:trans node) [state])
      (when-let [popa (get node :pop nil)]
-       (popped atn state (ev/eval-action popa {'reg reg})))
+       (popped atn state (popa reg)))
      (when-let [es (get node :epsilons nil)]
        (apply
         concat
@@ -35,7 +33,7 @@
              {:stack
               (cons (assoc frame
                            :node et
-                           :reg (ev/eval-action ea {'reg reg}))
+                           :reg (ea reg))
                     tail)})))))
      (for [[cn ct ca guard] (get node :cats nil)]
        (when (check-guard guard reg)
@@ -58,7 +56,7 @@
        {:stack
         (cons
          (-> (first tail)
-             (update :reg #(ev/eval-action cont {'reg %, 'it res})))
+             (update :reg cont res))
          (next tail))})
       [{:result res}])))
 
@@ -71,14 +69,14 @@
         (let [[tt ta guard] got]
           (when (check-guard guard reg)
             (if (= :pop tt)
-              (popped atn state (ev/eval-action ta {'reg reg, 'it sym}))
+              (popped atn state (ta reg sym))
               (epsilons
                atn
                {:stack
                 (cons
                  (-> frame
                      (assoc :node tt)
-                     (update :reg #(ev/eval-action ta {'reg %, 'it sym})))
+                     (update :reg ta sym))
                  tail)}))))))))
 
 (defn start [atn]
