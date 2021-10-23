@@ -6,6 +6,8 @@
             [semantic-construct.game.state :as s]
             [clojure.core.match :as m]))
 
+(def ^:dynamic *dynamic-game* nil)
+
 (defn compile-action
   "Compile an action from a parse into a function."
   [action]
@@ -24,49 +26,108 @@
   (update-in game [:listeners event] disj listener))
 
 (defn listener-apply [event listener]
-  (fn [game]
-    [#(remove-listener % :click listener)
+  (fn reapply [game]
+    ;; removing listeners should not undo actions done by it
+    [(fn [game] [reapply (remove-listener game :click listener)])
      (add-listener game :click listener)]))
 
-(defn parse->apply
+(defn comp-apply
+  ([] nil)
+  ([apply] apply)
+  ([app1 app2]
+   (fn [game]
+     (let [[unapply1 game] (app1 game)
+           [unapply2 game] (app2 game)]
+       [(comp-apply unapply1 unapply2) game])))
+  ([app1 app2 app3]
+   (fn [game]
+     (let [[unapply1 game] (app1 game)
+           [unapply2 game] (app2 game)
+           [unapply3 game] (app3 game)]
+       [(comp-apply unapply1 unapply2 unapply3) game])))
+  ([app1 app2 app3 & rest]
+   (fn [game]
+     (let [[unapplies game]
+           (reduce (fn [[unapplies game] app]
+                     (let [[unapply game] (app game)]
+                       [(conj unapplies unapply) game]))
+                   (let [[unapply game] (app1 game)]
+                     [[unapply] game])
+                   (list* app2 app3 rest))]
+       [(apply comp-apply unapplies) game]))))
+
+(defn add-application
+  ([visible] (add-application visible nil))
+  ([visible intrinsics]
+   (fn [game]
+     (let [[game id] (s/conj-object-for-id game visible)
+           game (if intrinsics
+                  (assoc-in game [:properties :intrinsics id] intrinsics)
+                  game)]
+       [(fn [game]
+          (let [{:keys [visible intrinsics]} (s/obj-props game id)]
+            [(add-application visible intrinsics)
+             (s/disj-object game id)]))
+        game]))))
+
+(defn parse->apply [parse]
+  (m/match parse
+    {:type :compose, :composed composed}
+    (apply comp-apply (map parse->apply composed))
+
+    {:type :repeat, :count count, :rule rule}
+    (apply comp-apply (repeat count (parse->apply rule)))
+
+    {:type :add, :thing props}
+    (add-application props)
+
+    {:type :when, :event event, :action action}
+    (let [action-fn (compile-action action)]
+      (m/match event
+        {:type :click, :receiver target}
+        (listener-apply
+         :click
+         (fn [game {evt-target :target}]
+           (if (binding [*dynamic-game* game]
+                 (target evt-target))
+             (action-fn game {:target evt-target})
+             game)))
+
+        :else (throw (ex-info "Unrecognised event" {:event event}))))
+
+    :else (throw (ex-info "Unrecognised rule" {:rule parse}))))
+
+(defn parses->apply
   "Takes a game a list of parses and yields an application function, or nil.
 
-  The application takes the game state, and yields a vector of the form
-  [unapply game]
-  where unapply is a unary function reverses the application on the game state."
-  [parse]
-  (when-let [[single-parse & ambiguous] (seq parse)]
+  An application function takes the game state, and yields a vector of the form
+  [reversion game]
+  Where reversion is another application function that reverses the application.
+
+  In some cases, such a reversion would be destructive, and lose state that has
+  since been gained (e.g. deleting an object)
+  The reversion function must undo the application function, but the application
+  function might not necessarily fully undo the reversion. The reversion function
+  therefore returns its own reversion function that has the correct effect."
+  [parses]
+  (when-let [[single-parse & ambiguous] (seq parses)]
     (when-not ambiguous
-      (m/match single-parse
-        {:type :rule, :rule rule}
-        (m/match rule
-          {:type :add, :thing props}
-          (fn [game]
-            (let [[game id] (s/conj-object-for-id game props)]
-              [#(s/disj-object % id) game]))
-
-          {:type :when, :event event, :action action}
-          (let [action-fn (compile-action action)]
-            (m/match event
-              {:type :click, :receiver target}
-              (listener-apply
-               :click
-               (fn [game {evt-target :target}]
-                 (if (= evt-target target)
-                   (action-fn game {:target target})
-                   game)))
-
-              :else (throw (ex-info "Unrecognised event" {:event event}))))
-
-          :else (throw (ex-info "Unrecognised rule" {:rule rule})))
-
-        :else (throw (ex-info "Unrecognised parse" {:parse single-parse}))))))
+      (parse->apply single-parse))))
 
 (defn rule->word-ids [game rule-id]
   (let [rule-words-unsorted (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
         get-props (-> game :properties :id-to-props)
         word-ids (vec (sort-by (comp :index get-props) rule-words-unsorted))]
     word-ids))
+
+(defn normalise-rule-indices [game rule-id]
+  (transduce 
+   (map-indexed vector)
+   (completing
+    (fn [game [i id]]
+      (s/assoc-props game id {:index i})))
+   game
+   (rule->word-ids game rule-id)))
 
 (defn reparse-rules [game atn]
   (let [rule-ids
@@ -84,17 +145,22 @@
                            rule-ids))]
     (if unchanged
       game
-      (let [game
+      (let [[revl game]
             (reduce ;; unapply all in reverse order first
-             (fn [game rule-id]
-               ((-> game :properties :intrinsics
-                    (get rule-id) :unapply (or identity))
-                game))
-             game (reverse rule-ids))
+             (fn [[revl game] rule-id]
+               (let [[reapply game]
+                     (if-let [unapply (-> game :properties :intrinsics
+                                          (get rule-id) :unapply)]
+                       (unapply game)
+                       [nil game])]
+                 [(cons [rule-id reapply] revl) game]))
+             [nil game]
+             (reverse rule-ids))
             game
             (reduce
-             (fn [game rule-id]
-               (binding [ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME game)]
+             (fn [game [rule-id reapply]]
+               (binding [*dynamic-game* game
+                         ev/*mapped-syms* (assoc ev/*mapped-syms* 'GAME #'*dynamic-game*)]
                  (let [{:keys [last-words last-pparse unapply]
                         :as rule-intrinsics}
                        (-> game :properties :intrinsics (get rule-id))
@@ -102,7 +168,10 @@
                        rule-words (mapv (comp :value get-props) word-ids)
                        new-pparse (atn/pparse atn rule-words)
                        hints (into #{} (atn/suggest atn new-pparse))
-                       apply-rule (parse->apply (atn/finish-parse new-pparse))
+                       full-parse (atn/finish-parse new-pparse)
+                       apply-rule (if (and reapply (= full-parse (atn/finish-parse last-pparse)))
+                                    reapply ;; faithfully undo the unapplication :)
+                                    (parses->apply full-parse))
                        [unapply-rule game] (if apply-rule (apply-rule game) [nil game])
                        game (assoc-in
                              game
@@ -116,7 +185,8 @@
                                     :applied (boolean apply-rule)))]
                    game)))
              game
-             rule-ids)]
+             revl)
+            game (reduce normalise-rule-indices game rule-ids)]
         game))))
 
 (defn dispatch-event [game event payload]

@@ -12,8 +12,10 @@
     assoc select-keys update conj reverse vec first next
     cons = not= + * / - str zero? mod rem apply into map
     comp partial count filter second merge list frequencies
-    get find vector vec name juxt nth seq seq? hash-map)
-   {'dbg #(doto % prn)}))
+    get find vector vec name juxt nth seq seq? hash-map
+    not get-in update-in distinct dissoc)
+   {'dbg #(doto % prn)
+    'clojure.core/deref deref}))
 
 (defn eval-action
   ([action] (eval-action action nil))

@@ -14,4 +14,5 @@
            :font "40px sans"}
     :button {:colour "#ff0000"}
     :victory {:colour "#ffff00"
+              :not-had-colour "#ff0000"
               :font "40px sans"}}})

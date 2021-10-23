@@ -72,31 +72,66 @@
 
 (deffeature Button
   :defs
-  {'THING-THAT-EXISTS [merge {"button"
-                              {:default-props
-                               {:type :button}}}]})
+  {'THING-THAT-EXISTS [set/union
+                       #{{:word (fn [count] (if (= 1 count) "button" "buttons"))
+                          :default-props {:type :button}}}]})
+
+(deffeature Win
+  :defs
+  ;; "there is a win" guys :)))
+  {'THING-THAT-EXISTS [set/union
+                       #{{:word (fn [count] (if (= 1 count) "win" "wins"))
+                          :default-props {:type :victory, :had false}}
+                         {:word (fn [count] (if (= 1 count) "victory" "victories"))
+                          :default-props {:type :victory, :had false}}}]})
 
 (deffeature TheGame
   :defs
-  {'THING-THAT-EXISTS [merge {}]}
+  {'THING-THAT-EXISTS [set/union #{}]}
   :atn
-  {:s '{:s {:cats [[:RULES :e (assoc reg :val {:type :rule, :rule it})]]}
+  {:s '{:s {:cats [[:RULES :e (assoc reg :val it)]]}
         :e {:pop (:val reg)}}
    :RULES '{:s {:cats [[:THERE-IS :e (assoc reg :r it)]
                        [:WHEN :e (assoc reg :r it)]]}
             :e {:pop (:r reg)}}
 
-   :THING-THAT-EXISTS '{:s {:dyn {:trans
+   :QUOTED '{:s {:trans {"\"" [:q1 (assoc reg :qm "\"")]
+                         "'" [:q1 (assoc reg :qm "'")]}}
+             :q1 {:dyn
+                  {:trans
+                   (dissoc
+                    (into {}
+                          (map (fn [id]
+                                 (let [value
+                                       (get-in @GAME
+                                               [:properties :id-to-props id :value])]
+                                   [value [:q2 (list 'assoc 'reg :v value)]])))
+                          (get-in @GAME [:properties :prop-pair-to-ids [:type :word]]))
+                    (:qm reg))}}
+             :q2 {:dyn
+                  {:trans {(:qm reg) '[:pop {:default-props {:type :word, :value (:v reg)}}]}}}}
+
+   :THING-THAT-EXISTS '{:s {:cats [[:QUOTED :e (assoc reg :q it)]]
+                            :dyn {:trans
                                   (into {}
-                                        (map (fn [[word info]]
-                                               [word [:pop (list 'quote info)]]))
-                                        THING-THAT-EXISTS)}}}
+                                        (map (fn [{:keys [word] :as info}]
+                                               [(word (:count reg))
+                                                [:pop (list 'quote info)]]))
+                                        THING-THAT-EXISTS)}}
+                        :e {:pop (:q reg)}}
    :THERE-IS '{:s {:trans {"there" [:s1 reg]}}
-               :s1 {:trans {"is" [:s2 reg]}}
-               :s2 {:trans {"a" [:s3 reg]}}
+               :s1 {:trans {"is" [:s2 (assoc reg :count 1)]
+                            "are" [:a1 reg]}}
+               :a1 {:cats [[:NATURAL :a2 (assoc reg :count it)]]}
+               :a2 {:epsilons [[:s3 reg (not= 1 (:count reg))]]}
+               :s2 {:trans {"a" [:s3 reg]
+                            "an" [:s3 reg]
+                            "one" [:s3 reg]}}
                :s3 {:cats [[:THING-THAT-EXISTS :e (assoc reg :thing (:default-props it))]]}
-               :e {:pop {:type :add
-                         :thing (:thing reg)}}}
+               :e {:pop {:type :repeat
+                         :count (:count reg)
+                         :rule {:type :add
+                                :thing (:thing reg)}}}}
    :WHEN
    '{:s {:trans {"when" [:s1 reg]}
          :cats [[:ACTION-THAT-CAN-BE-DONE :p1 (assoc reg :action it)]]}
@@ -109,6 +144,36 @@
                :event (:event reg)
                :action (:action reg)}}}
 
+   :INDEFINITE-REFERENCE
+   '{:s {:trans {"a" [:e reg]
+                 "an" [:e reg]}}
+     :q {:pop (fn [id]
+                (let [props (get-in @GAME [:id-to-props id])]
+                  (if (= (:type props) :word)
+                    (= (:value props) (:q reg))
+                    false)))}
+     :e {:cats [[:QUOTED :q (assoc reg :q it)]]
+         :dyn {:trans
+               (into
+                {}
+                (comp
+                 (map (comp
+                       ;; object's type property
+                       :type
+                       ;; map of object's properties
+                       (partial get (:id-to-props (:properties @GAME)))
+                       ;; id of object
+                       ))
+                 (distinct)
+                 (map (juxt name
+                            (fn [type]
+                              [:pop
+                               (list
+                                'quote
+                                (fn [x]
+                                  (= type (get-in @GAME [:properties :id-to-props x :type]))))]))))
+                ((comp :type :prop-to-ids :properties) @GAME))}}}
+
    :DEFINITE-REFERENCE
    '{:s {:trans {"the" [:e reg]}}
      :e {:dyn {:trans
@@ -119,13 +184,13 @@
                        (juxt name ;; type property name
                              (comp
                               ;; set of objects with [:type type]
-                              (partial get ((comp :prop-pair-to-ids :properties) GAME))
+                              (partial get ((comp :prop-pair-to-ids :properties) @GAME))
                               ;; [:type type]
                               (partial vector :type)))
                        ;; object's type property
                        :type
                        ;; map of object's properties
-                       (partial get (:id-to-props (:properties GAME)))
+                       (partial get (:id-to-props (:properties @GAME)))
                        ;; id of object
                        ))
                  ;; filter those with non-singleton type pair
@@ -133,10 +198,11 @@
                  (map (juxt first
                             (comp (partial vector :pop)
                                   ;; id
-                                  first second))))
-                ((comp :type :prop-to-ids :properties) GAME))}}}
+                                  (partial partial =) first second))))
+                ((comp :type :prop-to-ids :properties) @GAME))}}}
    :REFERENCE
-   '{:s {:cats [[:DEFINITE-REFERENCE :e (assoc reg :r it)]]}
+   '{:s {:cats [[:DEFINITE-REFERENCE :e (assoc reg :r it)]
+                [:INDEFINITE-REFERENCE :e (assoc reg :r it)]]}
      :e {:pop (:r reg)}}
 
    :ACTION
