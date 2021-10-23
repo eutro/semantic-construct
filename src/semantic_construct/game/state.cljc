@@ -59,13 +59,24 @@
 (defn conj-object [game props]
   (first (conj-object-for-id game props)))
 
+(defn obj-props [game id]
+  (let [props (:properties game)]
+    {:visible (get (:id-to-props props) id)
+     :intrinsics (get (:intrinsics props) id)}))
+
+(defn obj-set-props [game id props]
+  (-> game
+      (assoc-props id (:visible props))
+      (update-in [:intrinsics id] (:intrinsics props))))
+
 (defn disj-object [game id]
   (-> game
       (assoc-props id (into {}
                             (map (fn [[k v]] [k nil]))
                             (-> game :properties :id-to-props (get id))))
       (update :objects disj id)
-      (update-in [:properties :id-to-props] dissoc id)))
+      (update-in [:properties :id-to-props] dissoc id)
+      (update-in [:properties :intrinsics] dissoc id)))
 
 (defn new-game
   "Creates a new GameState with the given init objects.

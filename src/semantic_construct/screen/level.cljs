@@ -1,12 +1,14 @@
 (ns semantic-construct.screen.level
   (:require [semantic-construct.screen.screen :as screen]
+            [semantic-construct.screen.ui :as ui]
             [semantic-construct.mouse :as mouse]
             [semantic-construct.state :as state]
             [semantic-construct.theme :as theme]
             [semantic-construct.render :as r]
             [semantic-construct.game.engine :as eng]
             [semantic-construct.game.state :as game]
-            [semantic-construct.game.feature :as feature]))
+            [semantic-construct.game.feature :as feature]
+            [clojure.core.match :as m]))
 
 (defrecord Level [game engine base-scene])
 
@@ -38,10 +40,52 @@
        (update base-scene
                :objects
                into
-               [])}))])
+               [(textbox "The rules are self-explanatory:")])}))
 
-(defn load-level [id]
-  (nth levels id))
+   (let [engine
+         (eng/features->engine
+          feature/TheGame
+          feature/Natural
+          feature/Win
+          feature/Button)]
+     (map->Level
+      {:engine engine
+       :game
+       (-> (game/new-game)
+           (game/add-init-rules
+            ["there"]
+            ["win" "when"])
+           (game/add-init-words
+            "are" "two" "a" "buttons"
+            "button" "button" "the" "is" "pressed")
+           (eng/on-change engine))
+       :base-scene
+       (update base-scene
+               :objects
+               into
+               [(textbox "Feel free to change the rules, though.")])}))
+
+   (let [engine
+         (eng/features->engine
+          feature/TheGame
+          feature/Natural
+          feature/Win
+          feature/Button)]
+     (map->Level
+      {:engine engine
+       :game
+       (-> (game/new-game)
+           (game/add-init-rules
+            ["there" "is"]
+            ["win" "when"])
+           (game/add-init-words
+            "are" "two" "a" "\"" "\"" "'" "'" "an" "pressed")
+           (eng/on-change engine))
+       :base-scene
+       (update base-scene
+               :objects
+               into
+               [(textbox "Quotation marks seem handy...")])}))])
 
 (defn gen-pos []
   (Math/round (rand 160000)))
@@ -103,10 +147,13 @@
                     :fillStyle (-> theme/theme :game :rule style))))
        :victory (-> (r/text (if (:had props)
                               "victory (had)"
-                              "victory (not yet had)"))
+                              "victory (not had)"))
                     (r/obj-with-bindings
                      :font (-> theme/theme :game :victory :font)
-                     :fillStyle (-> theme/theme :game :victory :colour)))
+                     :fillStyle (-> theme/theme :game :victory
+                                    ((if (:had props)
+                                       :colour
+                                       :not-had-colour)))))
 
        (throw (ex-info "No renderer for type" {:type (:type props)})))
      translate-to-pos
@@ -115,7 +162,27 @@
 (defn text-width [text]
   (-> r/ctx (.measureText text) .-width))
 
-(def no-space? (partial contains? #{nil "," ":" ";"}))
+(defn no-space-after? [next-word]
+  (contains? #{nil "," ":" ";"} next-word))
+
+(defn add-spaces [words]
+  (loop [out []
+         words words
+         quoting []]
+    (if-let [[word next-word] (seq words)]
+      (m/match [[word next-word]]
+        [([_ (:or "\"" "'")] :guard #(= next-word (peek quoting)))]
+        (recur (conj out word) (next words) quoting)
+        [[(:or "\"" "'") _]]
+        (if (= word (peek quoting))
+          (recur (conj out (if (no-space-after? next-word) word (str word " ")))
+                 (next words)
+                 (pop quoting))
+          (recur (conj out word) (next words) (conj quoting word)))
+        [[_ _] :guard #(no-space-after? next-word)]
+        (recur (conj out word) (next words) quoting)
+        :else (recur (conj out (str word " ")) (next words) quoting))
+      out)))
 
 (defn place-rules [game]
   (let [counter (atom 0)]
@@ -125,16 +192,8 @@
          (let [{:keys [last-words word-ids]
                 :as rule-intrinsics}
                (-> game :properties :intrinsics (get rule-id))
-               gap-width (text-width " ")
-               widths ((fn widths [words]
-                         (lazy-seq
-                          (when (seq words)
-                            (cons
-                             (+ (text-width (first words))
-                                (if (no-space? (second words)) 0 gap-width))
-                             (widths (next words))))))
-                       last-words)
                *game (atom game)
+               widths (map text-width (add-spaces last-words))
                word-poses (reductions + 0 widths)
                y (* 50 (swap! counter inc))
                held (-> @state/state :screen :held :id)
@@ -224,36 +283,31 @@
           dist-sq (apply eucl-sq (map - [sx sy] @mouse/mouse))]
       (when (<= 100 dist-sq)
         (swap! state/state update :screen assoc :just-moved id)
-        (->
-         (let [game (eng/dispatch-event game :move {:target id})
-               id-to-props (-> game :properties :id-to-props)
-               props (id-to-props id)
-               scene (-> @state/state :screen :scene)]
-           (cond
-             (not (= :word (:type props))) game
-
-             (:rule props)
-             (if (<= 400 dist-sq)
-               ;; pop from the rule
-               (let [game (game/assoc-props game id {:rule nil, :index nil})
-                     rule-id (:rule props)
-                     left-in-rule (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
-                     game (if (= (count left-in-rule) (:index props))
-                            game ;; only the last word taken off, no need to shuffle
-                            (transduce ;; move all the existing words around
-                             (map-indexed vector)
-                             (completing
-                              (fn [game [i id]]
-                                (game/assoc-props game id {:index i})))
-                             game
-                             (sort-by (comp :index id-to-props) left-in-rule)))]
-                 game)
-               game)
-
-             ;; maybe added to rule
-             :else
-             (let [this-bb (:bb @(first (filter (comp #{id} :id) (:objects scene))))]
-               (if-let [{:keys [rule index]}
+        (let [game (eng/dispatch-event game :move {:target id})
+              id-to-props (-> game :properties :id-to-props)
+              props (id-to-props id)
+              scene (-> @state/state :screen :scene)
+              game
+              (if-not (and (:rule props) (<= 400 dist-sq))
+                game
+                ;; pop from the rule
+                (let [game (game/assoc-props game id {:rule nil, :index nil})
+                      rule-id (:rule props)
+                      left-in-rule (-> game :properties :prop-pair-to-ids (get [:rule rule-id]))
+                      game (if (= (count left-in-rule) (:index props))
+                             game ;; only the last word taken off, no need to shuffle
+                             (eng/normalise-rule-indices game rule-id)
+                             ;; move all the existing words around
+                             )]
+                  game))
+              id-to-props (-> game :properties :id-to-props)
+              props (id-to-props id)
+              game
+              ;; maybe add to rule
+              (if-let [{:keys [rule index]}
+                       (and
+                        (= :word (:type props))
+                        (not (:rule props))
                         (transduce
                          (comp
                           (filter :id)
@@ -266,7 +320,8 @@
                                      {:obj obj, :rule rule, :index index}
                                      :else nil))))
                           (filter identity)
-                          (filter #(r/bb-intersects? this-bb (-> % :obj deref :bb))))
+                          (let [this-bb (:bb @(first (filter (comp #{id} :id) (:objects scene))))]
+                            (filter #(r/bb-intersects? this-bb (-> % :obj deref :bb)))))
                          (completing
                           (fn [x y]
                             (cond
@@ -274,22 +329,22 @@
                               (not= (:rule x) (:rule y)) (min-key :rule x y)
                               :else (max-key :index x y))))
                          nil
-                         (:objects scene))]
-                 (let [in-rule (-> game :properties :prop-pair-to-ids (get [:rule rule]))
-                       game (game/assoc-props game id {:rule rule})
-                       target-index (if (infinite? index) (count in-rule) index)
-                       game (if (infinite? index)
-                              game
-                              (reduce (fn [game id]
-                                        (let [index (:index (id-to-props id))]
-                                          (if (>= index target-index)
-                                            (game/assoc-props game id {:index (inc index)})
-                                            game)))
-                                      game in-rule))
-                       game (game/assoc-props game id {:index target-index})]
-                   game)
-                 game))))
-         (->> (swap! state/state assoc-in [:screen :level :game])))
+                         (:objects scene)))]
+                (let [in-rule (-> game :properties :prop-pair-to-ids (get [:rule rule]))
+                      game (game/assoc-props game id {:rule rule})
+                      target-index (if (infinite? index) (count in-rule) index)
+                      game (if (infinite? index)
+                             game
+                             (reduce (fn [game id]
+                                       (let [index (:index (id-to-props id))]
+                                         (if (>= index target-index)
+                                           (game/assoc-props game id {:index (inc index)})
+                                           game)))
+                                     game in-rule))
+                      game (game/assoc-props game id {:index target-index})]
+                  game)
+                game)]
+          (swap! state/state assoc-in [:screen :level :game] game))
         (check-changes!)
         (screen/redraw)))))
 
@@ -299,6 +354,9 @@
            set-pos id (unfit-pos (mapv + @mouse/mouse [ox oy])))
     (set-scene!)
     (screen/redraw)))
+
+(defn load-level [id]
+  (nth levels id))
 
 (defn level-state [id]
   (let [level (load-level id)]
@@ -310,11 +368,32 @@
                  :mouseup [on-up]
                  :mousemove [on-move]}}))
 
-(defmethod screen/draw-screen :load-level
-  [{{:keys [id]} :screen}]
+(defn set-level! [id]
   (reset! state/state (level-state id))
   (set-scene!)
   (screen/redraw))
+
+(defmethod screen/draw-screen :load-level-select
+  [_]
+  (reset!
+   state/state
+   {:screen {:type :level-select
+             :scene (r/->Scene
+                     (into [(r/obj-with-bindings r/fill :fillStyle (:background theme/theme))]
+                           (map-indexed
+                            (fn [i lvl]
+                              (ui/menu-button
+                               (str i)
+                               (fn [] (set-level! i))
+                               (* (inc (quot i 3)) 60)
+                               (* (inc (mod i 3)) 60))))
+                           levels))}
+    :listeners {:click [ui/on-click]}})
+  (screen/redraw))
+
+(defmethod screen/draw-screen :level-select
+  [{{:keys [level scene]} :screen}]
+  (r/plot-scene scene))
 
 (defmethod screen/draw-screen :level
   [{{:keys [level scene]} :screen}]
