@@ -1,6 +1,5 @@
 (ns semantic-construct.game.state
-  (:require [semantic-construct.parser.evaluator :as ev]
-            [semantic-construct.parser.atn :as atn]
+  (:require [semantic-construct.parser.atn :as atn]
             [clojure.core.match :as m]))
 
 (defrecord GameState

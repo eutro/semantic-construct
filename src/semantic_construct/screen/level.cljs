@@ -243,15 +243,13 @@
                (filter identity))
               (-> @state/state :screen :scene r/under-mouse))
         clicked (disj clicked (-> @state/state :screen :just-moved))]
-    (when (seq clicked)
-      (swap! state/state update-in
-             [:screen :level :game]
-             (fn [game]
-               (reduce
-                (fn [game id]
-                  (eng/dispatch-event game :click {:target id}))
-                game
-                clicked)))
+    (when-some [[clicked-id] (seq clicked)]
+      (eng/with-engine (-> @state/state :screen :level :engine)
+        (swap! state/state update-in
+               [:screen :level :game]
+               eng/dispatch-event
+               :click
+               {:target clicked-id}))
       (check-changes!))))
 
 (defn on-down [evt]
@@ -283,7 +281,9 @@
           dist-sq (apply eucl-sq (map - [sx sy] @mouse/mouse))]
       (when (<= 100 dist-sq)
         (swap! state/state update :screen assoc :just-moved id)
-        (let [game (eng/dispatch-event game :move {:target id})
+        (let [game
+              (eng/with-engine (-> @state/state :screen :level :engine)
+                (eng/dispatch-event game :move {:target id}))
               id-to-props (-> game :properties :id-to-props)
               props (id-to-props id)
               scene (-> @state/state :screen :scene)
