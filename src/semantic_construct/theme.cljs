@@ -19,6 +19,3 @@
               :font "40px sans"}
     :explanatory-text {:font "20px sans"
                        :colour "#ffffff"}}})
-
-(def sprites
-  {:back-button [0 0 32 32]})
