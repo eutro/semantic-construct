@@ -28,8 +28,9 @@
        (fn []
          (run! #(% evt) (kw (:listeners @state/state))))))))
 
-(defn add-event-dispatcher [name]
-  (js/window.addEventListener name (event-dispatcher name)))
+(defn add-event-dispatcher
+  ([name] (add-event-dispatcher name name))
+  ([evt name] (js/window.addEventListener evt (event-dispatcher name))))
 
 (defonce initialized
   (do
@@ -40,6 +41,9 @@
     (add-event-dispatcher "mousedown")
     (add-event-dispatcher "mouseup")
     (add-event-dispatcher "mousemove")
+    (add-event-dispatcher "touchstart" "mousedown")
+    (add-event-dispatcher "touchmove" "mousemove")
+    (add-event-dispatcher "touchend" "mouseup")
     (add-event-dispatcher "keydown")
     (-> js/document .-body .-onload
         (set! #(js/window.requestAnimationFrame animate)))
