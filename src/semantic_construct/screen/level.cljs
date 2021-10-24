@@ -70,21 +70,8 @@
   #include/include "levels/lvl-finished.edn")
 
 (defn gen-pos []
-  (Math/round (rand 160000)))
-
-(defn unfit-pos [pos] pos)
-
-(defn fit-pos [pos]
-  (let [factor (/ 3 4)
-        fit (fn [v cap]
-              (rem v (* factor cap)))
-        w (.-width r/canvas)
-        h (.-height r/canvas)
-        [x y] (if (vector? pos)
-                pos
-                [pos (* 10 (quot pos (* factor w)))])
-        [x y] [(fit x w) (fit y h)]]
-    [x y]))
+  [(Math/round (rand (.-width r/canvas)))
+   (Math/round (rand (.-height r/canvas)))])
 
 (defn set-pos [game id pos]
   (assoc-in game [:properties :intrinsics id :pos] pos))
@@ -102,13 +89,24 @@
 (defn objects-for [*game id]
   (let [id-to-props (-> @*game :properties :id-to-props)
         props (id-to-props id)
-        [x y] (fit-pos (pos-for! *game id))
-        translate-to-pos (fn [obj] (r/transform obj (r/translation x y)))]
+        [x y] (pos-for! *game id)
+        translate-to-pos
+        (fn [obj]
+          (-> obj
+              (r/translate x y)
+              (r/truncate-inbounds)))]
     (->
      (case (:type props)
-       :button (-> (r/rect #(r/->BB 0 0 100 100))
+       :square (-> (r/rect #(r/->BB 0 0 100 100))
                    (r/obj-with-bindings
-                    :fillStyle (-> theme/theme :game :button :colour)))
+                    :fillStyle (-> theme/theme :game :square :colour)))
+       :circle (-> (r/ellipse #(r/->BB 0 0 100 100))
+                   (r/obj-with-bindings
+                    :fillStyle (-> theme/theme :game :circle :colour)))
+       :triangle (-> (r/triangle #(r/->BB 0 0 100 86.6))
+                     ;; height of equilateral triangle: (* 100 (Math/sin (/ Math/PI 3)))
+                     (r/obj-with-bindings
+                      :fillStyle (-> theme/theme :game :triangle :colour)))
        :word (-> (r/text (:value props))
                  (r/obj-with-bindings
                   :font (-> theme/theme :game :rule :font)
@@ -249,7 +247,7 @@
                (filter :id)
                (-> @state/state :screen :scene r/under-mouse))]
     (let [game (-> @state/state :screen :level :game)
-          [ox oy] (map - (fit-pos (pos-for! (atom game) id)) @mouse/mouse)
+          [ox oy] (map - (pos-for! (atom game) id) @mouse/mouse)
           [sx sy] @mouse/mouse]
       (swap! state/state update :screen assoc :held
              {:id id, :ox ox, :oy oy, :sx sx, :sy sy, :pre-game game})))
@@ -338,7 +336,7 @@
 (defn on-move [evt]
   (when-some [{:keys [id ox oy]} (-> @state/state :screen :held)]
     (swap! state/state update-in [:screen :level :game]
-           set-pos id (unfit-pos (mapv + @mouse/mouse [ox oy])))
+           set-pos id (mapv + @mouse/mouse [ox oy]))
     (set-scene!)
     (screen/redraw)))
 
@@ -373,8 +371,7 @@
   (let [level (load-level id)]
     {:screen {:type :level
               :level level}
-     :listeners {:resize [set-scene!]
-                 :click [on-click]
+     :listeners {:click [on-click]
                  :keydown [on-keydown]
                  :mousedown [on-down]
                  :mouseup [on-up]
@@ -403,7 +400,7 @@
                               (fn [i lvl]
                                 (->
                                  (ui/menu-button
-                                  (str i)
+                                  (str (inc i))
                                   (fn [] (set-level! i))
                                   size size
                                   0 start-y)

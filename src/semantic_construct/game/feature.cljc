@@ -3,8 +3,12 @@
 (def ^:dynamic *vars*)
 
 (def things-that-exist
-  [{:word (fn [count] (if (= 1 count) "button" "buttons"))
-    :default-props {:type :button}}
+  [{:word (fn [count] (if (= 1 count) "square" "square"))
+    :default-props {:type :square}}
+   {:word (fn [count] (if (= 1 count) "circle" "circles"))
+    :default-props {:type :circle}}
+   {:word (fn [count] (if (= 1 count) "triangle" "triangle"))
+    :default-props {:type :triangle}}
    ;; "there is a win" :))
    {:word (fn [count] (if (= 1 count) "win" "wins"))
     :default-props {:type :victory, :had false}}
@@ -56,9 +60,8 @@
                           [:INDEFINITE-REFERENCE :e (fn [reg it] (assoc reg :r it)) nil]]},
                :e {:pop :r}},
 
-   :DEFINITE-REFERENCE
-   {:s {:trans {"the" [:e (fn [reg it] reg)]}},
-    :e {:dyn
+   :DESCRIPTION
+   {:s {:dyn
         (fn [reg]
           {:trans
            (into
@@ -66,17 +69,48 @@
             (comp (map (fn [id] (get-in *vars* [:game :properties :id-to-props id :type])))
                   (dedupe)
                   (map (fn [type]
-                         (let [pred
-                               (fn [id]
-                                 (let [properties (-> *vars* :game :properties)]
-                                   (and (-> properties
-                                            :id-to-props (get id)
-                                            :type (= type))
-                                        (-> properties
-                                            :prop-pair-to-ids (get [:type type])
-                                            count (= 1)))))]
-                           [(name type) [:pop (constantly pred)]]))))
-            (-> *vars* :game :properties :prop-to-ids :type))})}},
+                         (let [info
+                               {:pred
+                                (fn [id]
+                                  (-> *vars* :game :properties
+                                      :id-to-props (get id)
+                                      :type (= type)))
+                                :get-all
+                                (fn []
+                                  (-> *vars* :game :properties
+                                      :prop-pair-to-ids
+                                      (get [:type type])))}]
+                           [(name type)
+                            [:pop (constantly info)]]))))
+            (-> *vars* :game :properties :prop-to-ids :type))})}}
+
+   :DEFINITE-REFERENCE
+   {:s {:trans {"the" [:s1 (fn [reg it] reg)]}},
+    :s1 {:cats [[:DESCRIPTION :e
+                 (fn [reg it]
+                   (assoc reg
+                          :pred (:pred it)
+                          :get-all (:get-all it)))]]}
+    :e {:pop (fn [{:keys [pred get-all]}]
+               (fn [id]
+                 (let [all (get-all)]
+                   (and (= 1 (count all)) (all id)))))}}
+
+   :INDEFINITE-REFERENCE
+   {:s {:trans {"a" [:s1 (fn [reg it] reg)],
+                "an" [:s1 (fn [reg it] reg)]}
+        :epsilons [[:q1 identity]]},
+    :s1 {:epsilons [[:d1 identity]
+                    [:q1 identity]]}
+    :q1 {:cats [[:QUOTED :q2 (fn [reg it] (assoc reg :q it))]]},
+    :q2 {:pop (fn [reg]
+                (fn [id]
+                  (let [props (get-in *vars* [:game :properties :id-to-props id])]
+                    (and (= (:type props) :word)
+                         (= (:value props) (:q reg))))))}
+    :d1 {:cats [[:DESCRIPTION :d2 (fn [reg it] (assoc reg :pred (:pred it)))]]}
+    :d2 {:pop (fn [reg] (:pred reg))}}
+
    :WHEN {:s
           {:trans {"when" [:s1 (fn [reg it] reg)]},
            :cats [[:ACTION-THAT-CAN-BE-DONE
@@ -95,33 +129,6 @@
                        :e
                        (fn [reg it] (assoc reg :event it))]]},
           :e {:pop (fn [reg] {:type :when, :event (:event reg), :action (:action reg)})}},
-   :INDEFINITE-REFERENCE
-   {:s {:trans {"a" [:e (fn [reg it] reg)],
-                "an" [:e (fn [reg it] reg)]}
-        :epsilons [[:pq identity]]},
-    :s1 {:epsilons [[:e identity]
-                    [:pq identity]]}
-    :pq {:cats [[:QUOTED :q (fn [reg it] (assoc reg :q it))]]},
-    :q {:pop (fn [reg]
-               (fn [id]
-                 (let [props (get-in *vars* [:game :properties :id-to-props id])]
-                   (and (= (:type props) :word)
-                        (= (:value props) (:q reg))))))},
-    :e {:dyn
-        (fn [reg]
-          {:trans
-           (into
-            {}
-            (comp (map (fn [id] (get-in *vars* [:game :properties :id-to-props id :type])))
-                  (dedupe)
-                  (map (fn [type]
-                         (let [pred
-                               (fn [id]
-                                 (-> *vars* :game :properties
-                                     :id-to-props (get id)
-                                     :type (= type)))]
-                           [(name type) [:pop (constantly pred)]]))))
-            (-> *vars* :game :properties :prop-to-ids :type))})}},
 
    :ACTION
    {:s {:trans {"is" [:is (fn [reg it] reg)]}},
