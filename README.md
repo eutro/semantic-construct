@@ -1,10 +1,19 @@
 # semantic-construct
 
-FIXME: Write a one-line description of your library/project.
+> _In the beginning was the Word, and the Word was with God, and the Word was God. [...]
+> Through him all things were made; without him nothing was made that has been made._
+>
+> \- John 1:1-3
+
+Semantic Construct is a puzzle game about building the world with words.
 
 ## Overview
 
-FIXME: Write a paragraph about the library/project and highlight its goals.
+You can play [here](eutro.github.io/semantic-construct) (jk, TODO).
+
+Drag around words to create and modify the very rules of the world.
+
+TODO: screenshots
 
 ## Setup
 
