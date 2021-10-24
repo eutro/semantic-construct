@@ -1,0 +1,5 @@
+{:rules [["there" "are"]
+         ["is" "is"]
+         ["is" "a" "a"]
+         ["win" "when" "there"]]
+ :words ["circle" "triangle" "\"" "\"" "three" "more" "than" "one" "square" "shape"]}
