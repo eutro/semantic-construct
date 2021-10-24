@@ -9,18 +9,20 @@
   (doto r/canvas
     (-> .-width (set! js/window.innerWidth))
     (-> .-height (set! js/window.innerHeight)))
-  (scr/redraw))
+  (state/call-with-escape-base scr/redraw))
 
 (defn animate []
   (try
-    (scr/redraw)
+    (state/call-with-escape-base scr/redraw)
     (finally
       (js/window.requestAnimationFrame animate))))
 
 (defn event-dispatcher [name]
   (let [kw (keyword name)]
     (fn [evt]
-      (run! #(% evt) (kw (:listeners @state/state))))))
+      (state/call-with-escape-base
+       (fn []
+         (run! #(% evt) (kw (:listeners @state/state))))))))
 
 (defn add-event-dispatcher [name]
   (js/window.addEventListener name (event-dispatcher name)))
@@ -34,5 +36,6 @@
     (add-event-dispatcher "mousedown")
     (add-event-dispatcher "mouseup")
     (add-event-dispatcher "mousemove")
+    (add-event-dispatcher "keydown")
     (js/window.requestAnimationFrame animate)
     true))

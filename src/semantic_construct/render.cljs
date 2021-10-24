@@ -151,4 +151,3 @@
         (js/DOMMatrix.)
         (fn [{:keys [mat]}]
           (run! plot-object (map #(transform % mat) derefd))))))))
-

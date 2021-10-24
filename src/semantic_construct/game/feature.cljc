@@ -32,10 +32,12 @@
                  (fn [reg]
                    {:trans
                     {(:qm reg)
-                     [:pop (fn [reg it] {:default-props {:type :word, :value (:v reg)}})]}})}},
+                     [:pop (fn [reg it] (:v reg))]}})}},
 
    :THING-THAT-EXISTS
-   {:s {:cats [[:QUOTED :e (fn [reg it] (assoc reg :q it)) nil]],
+   {:s {:cats [[:QUOTED :e
+                (fn [reg it]
+                  (assoc reg :q {:default-props {:type :word, :value it}}))]],
         :dyn
         (fn [reg]
           {:trans
@@ -98,10 +100,10 @@
                 "an" [:e (fn [reg it] reg)]}},
     :q {:pop (fn [reg]
                (fn [id]
-                 (let [props (get-in (:game *vars*) [:id-to-props id])]
+                 (let [props (get-in *vars* [:game :properties :id-to-props id])]
                    (and (= (:type props) :word)
                         (= (:value props) (:q reg))))))},
-    :e {:cats [[:QUOTED :q (fn [reg it] (assoc reg :q it)) nil]],
+    :e {:cats [[:QUOTED :q (fn [reg it] (assoc reg :q it))]],
         :dyn
         (fn [reg]
           {:trans
