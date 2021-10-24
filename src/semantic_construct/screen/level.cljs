@@ -67,7 +67,7 @@
    (into [] (map-indexed level-from-raw))))
 
 (def finished-game-level
-  (include "levels/lvl-finished.edn"))
+  (level-from-raw (include "levels/lvl-finished.edn")))
 
 (defn gen-pos []
   [(Math/round (rand (.-width r/canvas)))

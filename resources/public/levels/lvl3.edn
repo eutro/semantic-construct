@@ -1,4 +1,4 @@
-{:text "You wonder what happens if you quote words."
+{:text "Quotation marks could be handy..."
  :rules [["there" "is"]
          ["win" "when"]]
  :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}

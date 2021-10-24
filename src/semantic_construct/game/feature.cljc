@@ -176,7 +176,7 @@
 
    :CONDITION
    {:s {:cats [[:REFERENCE :refd (fn [reg it] (assoc reg :refd it))]
-               [:BOOLEAN-EXPR :bool (fn [reg it] (assoc reg :bool it))]]},
+               [:BOOLEAN-EXPR :bool (fn [reg it] (assoc reg :cond it))]]},
     :refd {:trans {"is" [:is (fn [reg it] reg)]}}
     :is {:trans {"pressed" [:pop (fn [reg it]
                                    {:type :click
@@ -205,8 +205,8 @@
                 (when (and (:there-is/bool reg) (not (:cmp reg)))
                   {:cats [[:PREFIX-CMP :a1 (fn [reg it] (assoc reg :cmp it))]]}))},
     :a2 {:epsilons [[:s3 identity (fn [reg] (not= 1 (:count reg)))]]},
-    :s2 {:trans {"a" [:s3 (fn [reg it] (assoc reg :count 1))],
-                 "an" [:s3 (fn [reg it] (assoc reg :count 1))],
+    :s2 {:trans {"a" [:s3 (fn [reg it] (assoc reg :count 1 :default-cmp >=))],
+                 "an" [:s3 (fn [reg it] (assoc reg :count 1 :default-cmp >=))],
                  "one" [:s3 (fn [reg it] (assoc reg :count 1))]}
          :dyn (fn [reg]
                 (when (and (:there-is/bool reg) (not (:cmp reg)))
@@ -214,11 +214,12 @@
     :s3 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]},
     :e {:dyn (fn [reg]
                {:epsilons (if (:there-is/bool reg)
-                            [[:b identity (fn [reg] (:cmp reg))]]
+                            [[:b identity]]
                             [[:e1 identity (fn [reg] (:ctor (:thing reg)))]])})}
     :b {:pop
-        (fn [{{:keys [product]} :thing, n :count, :keys [cmp]}]
-          (fn [] (cmp (count (product-all product)) n)))}
+        (fn [{{:keys [product]} :thing, n :count, :keys [cmp default-cmp]}]
+          (let [cmp (or cmp default-cmp =)]
+            (fn [] (cmp (count (product-all product)) n))))}
     :e1 {:pop
          (fn [reg]
            {:type :repeat,
@@ -283,6 +284,6 @@
   (-> (s/new-game)
       (s/add-init-rules ["win" "when" "\"" "pressed" "\"" "is" "pressed"])
       (e/on-change))
-  (atn/parse-and-suggest atn ["win" "when" "there" "are" "at" "least" "zero" "triangles"])
+  (atn/parse-and-suggest atn ["win" "when" "there" "are" "zero" "triangles"])
   ;;
   )

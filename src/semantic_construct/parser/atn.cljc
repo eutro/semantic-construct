@@ -12,7 +12,7 @@
                       {:net net
                        :node node})))
     (if-let [dyn (:dyn raw-node)]
-      (merge raw-node (dyn reg))
+      (merge-with into raw-node (dyn reg))
       raw-node)))
 
 (defn- epsilons [atn state]
