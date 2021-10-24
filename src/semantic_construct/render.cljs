@@ -25,10 +25,16 @@
    (dp3 d1 e1 f1, b2 e2 0)
    (dp3 d1 e1 f1, c2 f2 1)))
 (defn mulv [{:keys [a b c
-                    d e f]
-             x y}]
+                    d e f]}
+            x y]
   [(dp3 x y 1, a b c)
    (dp3 x y 1, d e f)])
+(defn msett [{:keys [a b c
+                     d e f]}]
+  (.setTransform ctx
+                 a d
+                 b e
+                 c f))
 
 (defprotocol Transform
   (transform [this matrix]))
@@ -208,7 +214,7 @@
          identity-matrix
          (fn [{:keys [mat]}]
            (.save ctx)
-           (.setTransform ctx mat)
+           (msett mat)
            (.fillText ctx text 0 0)
            (.restore ctx)))))))
 
