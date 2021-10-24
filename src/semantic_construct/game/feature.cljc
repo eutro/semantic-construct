@@ -97,14 +97,17 @@
           :e {:pop (fn [reg] {:type :when, :event (:event reg), :action (:action reg)})}},
    :INDEFINITE-REFERENCE
    {:s {:trans {"a" [:e (fn [reg it] reg)],
-                "an" [:e (fn [reg it] reg)]}},
+                "an" [:e (fn [reg it] reg)]}
+        :epsilons [[:pq identity]]},
+    :s1 {:epsilons [[:e identity]
+                    [:pq identity]]}
+    :pq {:cats [[:QUOTED :q (fn [reg it] (assoc reg :q it))]]},
     :q {:pop (fn [reg]
                (fn [id]
                  (let [props (get-in *vars* [:game :properties :id-to-props id])]
                    (and (= (:type props) :word)
                         (= (:value props) (:q reg))))))},
-    :e {:cats [[:QUOTED :q (fn [reg it] (assoc reg :q it))]],
-        :dyn
+    :e {:dyn
         (fn [reg]
           {:trans
            (into

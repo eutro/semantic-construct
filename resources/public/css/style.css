@@ -1,5 +1,8 @@
-#sprites {
-    display: none;
+.sprite {
+    display: inline;
+    position: absolute;
+    visibility: hidden;
+    top: -100%;
 }
 
 body {
@@ -20,6 +23,9 @@ body {
     position: relative;
     display: block;
     margin: auto;
+}
+
+.pixelated {
     image-rendering: -moz-crisp-edges;
     image-rendering: -webkit-crisp-edges;
     image-rendering: pixelated;

@@ -37,5 +37,6 @@
     (add-event-dispatcher "mouseup")
     (add-event-dispatcher "mousemove")
     (add-event-dispatcher "keydown")
-    (js/window.requestAnimationFrame animate)
+    (-> js/document .-body .-onload
+        (set! #(js/window.requestAnimationFrame animate)))
     true))
