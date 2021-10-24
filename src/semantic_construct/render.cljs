@@ -5,33 +5,63 @@
 (def canvas (. js/document (getElementById "canvas")))
 (def ctx (.getContext canvas "2d"))
 
+(defrecord Matrix [a b c
+                   d e f])
+(defn dp3 [a1 b1 c1
+           a2 b2 c2]
+  (+ (* a1 a2)
+     (* b1 b2)
+     (* c1 c2)))
+(defn mulm [{a1 :a,  b1 :b, c1 :c
+             d1 :d,  e1 :e, f1 :f}
+            {a2 :a,  b2 :b, c2 :c
+             d2 :d,  e2 :e, f2 :f}]
+  (->Matrix
+   (dp3 a1 b1 c1, a2 d2 0)
+   (dp3 a1 b1 c1, b2 e2 0)
+   (dp3 a1 b1 c1, c2 f2 1)
+
+   (dp3 d1 e1 f1, a2 d2 0)
+   (dp3 d1 e1 f1, b2 e2 0)
+   (dp3 d1 e1 f1, c2 f2 1)))
+(defn mulv {:keys [a b c
+                   d e f]
+            x y}
+  [(dp3 x y 1, a b c)
+   (dp3 x y 1, d e f)])
+
 (defprotocol Transform
   (transform [this matrix]))
 
-;; just don't mutate it, okay?
-(def identity-matrix (js/DOMMatrix.))
+(def identity-matrix (translation 0 0))
 
 (defn translation [dx dy]
-  (-> (js/DOMMatrix.) (.translateSelf dx dy)))
+  (->Matrix
+   1 0 dx
+   0 1 dy))
 
 (defn translate [this dx dy]
   (transform this (translation dx dy)))
 
 (defn scale
   ([this sf] (transform this (scale sf)))
-  ([sf] (-> (js/DOMMatrix.) (.scaleSelf sf sf))))
+  ([sf]
+   (->Matrix
+    sf 0 0
+    0 sf 0)))
 
 (defrecord BB [minx miny maxx maxy]
   Transform
   (transform [this mat]
-    (let [minp (-> (js/DOMPoint. minx miny) (.matrixTransform mat))
-          maxp (-> (js/DOMPoint. maxx maxy) (.matrixTransform mat))]
-      (BB. (.-x minp) (.-y minp) (.-x maxp) (.-y maxp)))))
-(defrecord InCtxRenderObject [bb ^js/DOMMatrix mat plot]
+    (let [[minx miny] (mulv mat minx miny)
+          [maxx maxy] (mulv mat maxx maxy)]
+      (BB. minx miny maxx maxy))))
+(defrecord InCtxRenderObject [bb mat plot]
   Transform
-  (transform [this ^js/DOMMatrix omat]
-    (.preMultiplySelf mat omat)
-    (update this :bb transform omat)))
+  (transform [this omat]
+    (-> this
+        (assoc :mat (mulm omat mat))
+        (update :bb transform omat))))
 (defrecord RenderObject [thunk]
   Transform
   (transform [this mat] (assoc this :thunk #(transform (thunk) mat)))
@@ -92,7 +122,7 @@
     (fn []
       (->InCtxRenderObject
        (bb-thunk)
-       (js/DOMMatrix.)
+       identity-matrix
        (fn [{{:keys [minx miny maxx maxy]} :bb}]
          (.drawImage ctx
                      sprites
@@ -107,7 +137,7 @@
    (fn []
      (->InCtxRenderObject
       (bb-thunk)
-      (js/DOMMatrix.)
+      identity-matrix
       (fn [{{:keys [minx miny maxx maxy]} :bb}]
         ;; the matrix is already captured in the bb
         (.fillRect ctx minx miny (- maxx minx) (- maxy miny)))))))
@@ -117,7 +147,7 @@
    (fn []
      (->InCtxRenderObject
       (bb-thunk)
-      (js/DOMMatrix.)
+      identity-matrix
       (fn [{{:keys [minx miny maxx maxy]} :bb}]
         (doto ctx
           .beginPath
@@ -136,7 +166,7 @@
    (fn []
      (->InCtxRenderObject
       (bb-thunk)
-      (js/DOMMatrix.)
+      identity-matrix
       (fn [{{:keys [minx miny maxx maxy]} :bb}]
         (doto ctx
           .beginPath
@@ -150,7 +180,7 @@
    (fn []
     (->InCtxRenderObject
      (bb-thunk)
-     (js/DOMMatrix.)
+     identity-matrix
      (fn [{{:keys [minx miny maxx maxy]} :bb}]
         (.strokeRect ctx minx miny (- maxx minx) (- maxy miny)))))))
 
@@ -172,7 +202,7 @@
             (Math/abs (.-actualBoundingBoxDescent text-metrics)))]
         (->InCtxRenderObject
          bb
-         (js/DOMMatrix.)
+         identity-matrix
          (fn [{:keys [mat]}]
            (.save ctx)
            (.setTransform ctx mat)
@@ -192,7 +222,7 @@
      (let [derefd (map deref objs)]
        (->InCtxRenderObject
         (apply merge-bbs (map :bb derefd))
-        (js/DOMMatrix.)
+        identity-matrix
         (fn [{:keys [mat]}]
           (run! plot-object (map #(transform % mat) derefd))))))))
 
