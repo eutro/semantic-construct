@@ -24,9 +24,9 @@
    (dp3 d1 e1 f1, a2 d2 0)
    (dp3 d1 e1 f1, b2 e2 0)
    (dp3 d1 e1 f1, c2 f2 1)))
-(defn mulv {:keys [a b c
-                   d e f]
-            x y}
+(defn mulv [{:keys [a b c
+                    d e f]
+             x y}]
   [(dp3 x y 1, a b c)
    (dp3 x y 1, d e f)])
 
