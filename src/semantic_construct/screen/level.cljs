@@ -11,6 +11,8 @@
             [semantic-construct.game.feature :as feature]
             [clojure.core.match :as m]))
 
+(defn force-load [])
+
 (defrecord Level [game])
 
 (def base-scene
