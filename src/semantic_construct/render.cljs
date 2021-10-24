@@ -27,9 +27,9 @@
     (let [minp (-> (js/DOMPoint. minx miny) (.matrixTransform mat))
           maxp (-> (js/DOMPoint. maxx maxy) (.matrixTransform mat))]
       (BB. (.-x minp) (.-y minp) (.-x maxp) (.-y maxp)))))
-(defrecord InCtxRenderObject [bb mat plot]
+(defrecord InCtxRenderObject [bb ^js/DOMMatrix mat plot]
   Transform
-  (transform [this omat]
+  (transform [this ^js/DOMMatrix omat]
     (.preMultiplySelf mat omat)
     (update this :bb transform omat)))
 (defrecord RenderObject [thunk]
