@@ -1,19 +1,71 @@
-(ns semantic-construct.game.feature)
+(ns semantic-construct.game.feature
+  (:require [clojure.set :as set]
+            [semantic-construct.parser.atn :as atn]))
 
-(def ^:dynamic *vars*)
+(def ^:dynamic *vars* nil)
+
+(defrecord Thing [words product ctor])
+
+(defn prop-set-op
+  ([op tp] (-> (get-in *vars* [:game :properties :prop-pair-to-ids tp])))
+  ([op tp1 tp2]
+   (let [pp->ids (get-in *vars* [:game :properties :prop-pair-to-ids])]
+     (op (pp->ids tp1) (pp->ids tp2))))
+  ([op tp1 tp2 tp3 & tpr]
+   (let [pp->ids (get-in *vars* [:game :properties :prop-pair-to-ids])]
+     (apply op (map pp->ids (list* tp1 tp2 tp3 tpr))))))
+
+(defn prop-intersection [& tps]
+  (apply prop-set-op set/intersection tps))
+
+(defn prop-union [& tps]
+  (apply prop-set-op set/union tps))
+
+(defn has-prop?
+  ([id prop value] (has-prop? id [prop value]))
+  ([id tp] ((get-in *vars* [:game :properties :prop-pair-to-ids]) id)))
+
+(defn prop-all? [id & tps]
+  (every? (partial has-prop? id) tps))
+
+(defn prop-any? [id & tps]
+  (some (partial has-prop? id) tps))
+
+(defn product-all [product]
+  (apply set/union (map (partial apply prop-intersection) product)))
+
+(defn product-check? [product id]
+  (some (partial apply prop-all?) product))
+
+(defn thing-by-types [singular plural types & {:as ctor-props}]
+  (let [product (into #{} (map (fn [ty] (merge ctor-props {:type ty}))) types)]
+    (map->Thing
+     {:words (fn [count] (if (= 1 count) singular plural))
+      :product product
+      :ctor (when (= 1 (count product)) (first product))})))
 
 (def things-that-exist
-  [{:word (fn [count] (if (= 1 count) "square" "square"))
-    :default-props {:type :square}}
-   {:word (fn [count] (if (= 1 count) "circle" "circles"))
-    :default-props {:type :circle}}
-   {:word (fn [count] (if (= 1 count) "triangle" "triangle"))
-    :default-props {:type :triangle}}
-   ;; "there is a win" :))
-   {:word (fn [count] (if (= 1 count) "win" "wins"))
-    :default-props {:type :victory, :had false}}
-   {:word (fn [count] (if (= 1 count) "victory" "victories"))
-    :default-props {:type :victory, :had false}}])
+  [(thing-by-types #{"object"}
+                   #{"objects"}
+                   #{:square :circle :triangle :victory})
+   (thing-by-types #{"square"}
+                   #{"squares"}
+                   #{:square})
+   (thing-by-types #{"circle"}
+                   #{"circles"}
+                   #{:circle})
+   (thing-by-types #{"triangle"}
+                   #{"triangles"}
+                   #{:triangle})
+   ;; "there is a win" because everybody is going to try it
+   (thing-by-types #{"win"}
+                   #{"wins"}
+                   #{:victory}
+                   :had false)
+   (thing-by-types #{"victory"}
+                   #{"victories"}
+                   #{:victory}
+                   :had false)])
 
 (def atn
   {:s {:s {:cats [[:RULES :e (fn [reg it] (assoc reg :val it)) nil]]},
@@ -26,11 +78,11 @@
                    {:trans
                     (dissoc
                      (into {}
-                           (map
-                            (fn [id]
-                              (let [value (get-in *vars* [:game :properties :id-to-props id :value])]
-                                [value [:q2 (fn [reg it] (assoc reg :v value))]])))
-                           (get-in *vars* [:game :properties :prop-pair-to-ids [:type :word]]))
+                           (comp
+                            (map #(get-in *vars* [:game :properties :id-to-props % :value]))
+                            (dedupe)
+                            (map (fn [value] [value [:q2 (fn [reg it] (assoc reg :v value))]])))
+                           (prop-intersection [:type :word]))
                      (:qm reg))})},
             :q2 {:dyn
                  (fn [reg]
@@ -38,17 +90,29 @@
                     {(:qm reg)
                      [:pop (fn [reg it] (:v reg))]}})}},
 
-   :THING-THAT-EXISTS
+   :QUOTED-THING
    {:s {:cats [[:QUOTED :e
                 (fn [reg it]
-                  (assoc reg :q {:default-props {:type :word, :value it}}))]],
+                  (assoc
+                   reg
+                   :q
+                   (map->Thing
+                    {:words (constantly #{})
+                     :product #{{:type :word, :value it}}
+                     :ctor {:type :word, :value it}})))]]}
+    :e {:pop :q}}
+
+   :THING
+   {:s {:cats [[:QUOTED-THING :e (fn [reg it] (assoc reg :q it))]]
         :dyn
         (fn [reg]
           {:trans
            (into {}
-                 (map
-                  (fn [{:keys [word], :as info}]
-                    [(word (:count reg)) [:pop (constantly info)]]))
+                 (mapcat
+                  (fn [{:keys [words], :as info}]
+                    (let [rhs [:pop (constantly info)]]
+                      (map (fn [word] [word rhs])
+                           (words (or (:count reg) (throw (ex-info "Unknown count for thing." {}))))))))
                  things-that-exist)})},
     :e {:pop :q}},
 
@@ -60,56 +124,21 @@
                           [:INDEFINITE-REFERENCE :e (fn [reg it] (assoc reg :r it)) nil]]},
                :e {:pop :r}},
 
-   :DESCRIPTION
-   {:s {:dyn
-        (fn [reg]
-          {:trans
-           (into
-            {}
-            (comp (map (fn [id] (get-in *vars* [:game :properties :id-to-props id :type])))
-                  (dedupe)
-                  (map (fn [type]
-                         (let [info
-                               {:pred
-                                (fn [id]
-                                  (-> *vars* :game :properties
-                                      :id-to-props (get id)
-                                      :type (= type)))
-                                :get-all
-                                (fn []
-                                  (-> *vars* :game :properties
-                                      :prop-pair-to-ids
-                                      (get [:type type])))}]
-                           [(name type)
-                            [:pop (constantly info)]]))))
-            (-> *vars* :game :properties :prop-to-ids :type))})}}
-
    :DEFINITE-REFERENCE
-   {:s {:trans {"the" [:s1 (fn [reg it] reg)]}},
-    :s1 {:cats [[:DESCRIPTION :e
-                 (fn [reg it]
-                   (assoc reg
-                          :pred (:pred it)
-                          :get-all (:get-all it)))]]}
-    :e {:pop (fn [{:keys [pred get-all]}]
+   {:s {:trans {"the" [:s1 (fn [reg it] (assoc reg :count 1))]}},
+    :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
+    :e {:pop (fn [{{:keys [product]} :thing}]
                (fn [id]
-                 (let [all (get-all)]
+                 (let [all (product-all product)]
                    (and (= 1 (count all)) (all id)))))}}
 
    :INDEFINITE-REFERENCE
-   {:s {:trans {"a" [:s1 (fn [reg it] reg)],
-                "an" [:s1 (fn [reg it] reg)]}
-        :epsilons [[:q1 identity]]},
-    :s1 {:epsilons [[:d1 identity]
-                    [:q1 identity]]}
-    :q1 {:cats [[:QUOTED :q2 (fn [reg it] (assoc reg :q it))]]},
-    :q2 {:pop (fn [reg]
-                (fn [id]
-                  (let [props (get-in *vars* [:game :properties :id-to-props id])]
-                    (and (= (:type props) :word)
-                         (= (:value props) (:q reg))))))}
-    :d1 {:cats [[:DESCRIPTION :d2 (fn [reg it] (assoc reg :pred (:pred it)))]]}
-    :d2 {:pop (fn [reg] (:pred reg))}}
+   {:s {:trans {"a" [:s1 (fn [reg it] (assoc reg :count 1))],
+                "an" [:s1 (fn [reg it] (assoc reg :count 1))]}
+        :cats [[:QUOTED-THING :e (fn [reg it] (assoc reg :thing it))]]},
+    :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
+    :e {:pop (fn [{{:keys [product]} :thing}]
+               (fn [id] (product-check? product id)))}}
 
    :WHEN {:s
           {:trans {"when" [:s1 (fn [reg it] reg)]},
@@ -130,32 +159,42 @@
                        (fn [reg it] (assoc reg :event it))]]},
           :e {:pop (fn [reg] {:type :when, :event (:event reg), :action (:action reg)})}},
 
-   :ACTION
-   {:s {:trans {"is" [:is (fn [reg it] reg)]}},
-    :is {:trans {"pressed" [:pop (fn [reg it] {:type :click, :receiver (:refd reg)})]}}},
+   :UNIVERSAL-REFERENCE
+   {:s {:trans {"all" [:s1 (fn [reg it] (assoc reg :count ##Inf))]}}
+    :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
+    :e {:pop :thing}}
+
+   :EXISTENTIAL-REFERENCE
+   {:s {:trans {"any" [:s1 (fn [reg it] (assoc reg :count 1))]}}
+    :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
+    :e {:pop :thing}}
 
    :THING-THAT-CAN-HAPPEN
    {:s {:cats [[:REFERENCE :refd (fn [reg it] (assoc reg :refd it)) nil]]},
-    :refd {:cats [[:ACTION :e (fn [reg it] (assoc reg :event it)) nil]]},
-    :e {:pop :event}},
+    :refd {:trans {"is" [:is (fn [reg it] reg)]}}
+    :is {:trans {"pressed" [:pop (fn [reg it]
+                                   {:type :click
+                                    :receiver (:refd reg)})]}}}
 
    :ACTION-THAT-CAN-BE-DONE {:s {:trans {"win" [:pop (constantly {:type :win})]}}},
 
-   :THERE-IS {:s {:trans {"there" [:s1 (fn [reg it] reg)]}},
-              :s1 {:trans {"is" [:s2 (fn [reg it] (assoc reg :count 1))],
-                           "are" [:a1 (fn [reg it] reg)]}},
-              :a1 {:cats [[:NATURAL :a2 (fn [reg it] (assoc reg :count it)) nil]]},
-              :a2 {:epsilons [[:s3 identity (fn [reg] (not= 1 (:count reg)))]]},
-              :s2 {:trans {"a" [:s3 (fn [reg it] reg)],
-                           "an" [:s3 (fn [reg it] reg)],
-                           "one" [:s3 (fn [reg it] reg)]}},
-              :s3 {:cats [[:THING-THAT-EXISTS :e
-                           (fn [reg it] (assoc reg :thing (:default-props it)))]]},
-              :e {:pop
-                  (fn [reg]
-                    {:type :repeat,
-                     :count (:count reg),
-                     :rule {:type :add, :thing (:thing reg)}})}}
+   :THERE-IS
+   {:s {:trans {"there" [:s1 (fn [reg it] reg)]}},
+    :s1 {:trans {"is" [:s2 (fn [reg it] (assoc reg :count 1))],
+                 "are" [:a1 (fn [reg it] reg)]}},
+    :a1 {:cats [[:NATURAL :a2 (fn [reg it] (assoc reg :count it)) nil]]},
+    :a2 {:epsilons [[:s3 identity (fn [reg] (not= 1 (:count reg)))]]},
+    :s2 {:trans {"a" [:s3 (fn [reg it] (assoc reg :count 1))],
+                 "an" [:s3 (fn [reg it] (assoc reg :count 1))],
+                 "one" [:s3 (fn [reg it] (assoc reg :count 1))]}},
+    :s3 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]},
+    :e {:epsilons [[:e1 identity (fn [reg] (:ctor (:thing reg)))]]}
+    :e1 {:pop
+         (fn [reg]
+           {:type :repeat,
+            :count (:count reg),
+            :rule {:type :add, :thing (:ctor (:thing reg))}})}}
+
    ;; you complain about French numbers but then you have this abomination...
    :ZERO {:s {:trans {"zero" [:pop (constantly 0)]}}},
    :DIGIT {:s {:trans {"six" [:pop (constantly 6)],
@@ -194,14 +233,27 @@
    :ONE-TO-999 {:s {:cats [[:DIGIT :digit (fn [reg it] (assoc reg :n it)) nil]
                            [:ONE-TO-99 :e (fn [reg it] (assoc reg :n it)) nil]]},
                 :digit {:trans {"hundred" [:hundred (fn [reg it] reg)]}},
-                :hundred {:trans {"and" [:hundred0 (fn [reg it] reg)]}},
-                :hundred0 {:cats
+                :hundred {:trans {"and" [:hundred1 (fn [reg it] reg)]}
+                          :pop (fn [reg] (* 100 (:n reg)))},
+                :hundred1 {:cats
                            [[:ONE-TO-99
                              :e
                              (fn [reg it] (assoc reg :n (+ (* (:n reg) 100) it)))
                              nil]]},
                 :e {:pop :n}},
+
    :NATURAL {:s {:cats
                  [[:ZERO :e (fn [reg it] (assoc reg :n it)) nil]
                   [:ONE-TO-999 :e (fn [reg it] (assoc reg :n it)) nil]]},
              :e {:pop :n}}})
+
+(comment
+  (require '[semantic-construct.game.state :as s]
+           '[semantic-construct.game.engine :as e])
+  (-> (s/new-game)
+      (s/add-init-rules ["there" "are" "two" "\"" "pressed" "\""]
+                        ["win" "when" "\"" "pressed" "\"" "is" "pressed"])
+      (e/on-change)
+      (e/dispatch-event :click {:target 5}))
+  ;;
+  )
