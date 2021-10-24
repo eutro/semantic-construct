@@ -9,7 +9,7 @@ Semantic Construct is a puzzle game about building the world with words.
 
 ## Overview
 
-You can play [here](eutro.github.io/semantic-construct) (jk, TODO).
+You can play [here](https://eutro.github.io/semantic-construct).
 
 Drag around words to create and modify the very rules of the world.
 
