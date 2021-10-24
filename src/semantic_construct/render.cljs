@@ -14,6 +14,13 @@
 (defn translation [dx dy]
   (-> (js/DOMMatrix.) (.translateSelf dx dy)))
 
+(defn translate [this dx dy]
+  (transform this (translation dx dy)))
+
+(defn scale
+  ([this sf] (transform this (scale sf)))
+  ([sf] (-> (js/DOMMatrix.) (.scaleSelf sf sf))))
+
 (defrecord BB [minx miny maxx maxy]
   Transform
   (transform [this mat]
@@ -75,21 +82,25 @@
       (.restore ctx)))
   nil)
 
-(def sprites (. js/document (getElementById "sprites")))
-(defn sprite-object [bb-thunk sx sy sw sh]
-  (object
-   (fn []
-     (->InCtxRenderObject
-      (bb-thunk)
-      (js/DOMMatrix.)
-      (fn [this]
-        (let [{:keys [x y w h]} (:bb this)]
-          (.drawImage ctx
-                      sprites
-                      sx sy
-                      sw sh
-                      x y
-                      w h)))))))
+(def sprites (js/document.getElementById "sprites"))
+(defn sprite-object
+  ([sprites] (sprite-object sprites 0 0 (.-width sprites) (.-height sprites)))
+  ([sprites sx sy sw sh]
+   (sprite-object sprites (constantly (->BB 0 0 sw sh)) sx sy sw sh))
+  ([sprites bb-thunk sx sy sw sh]
+   (object
+    (fn []
+      (->InCtxRenderObject
+       (bb-thunk)
+       (js/DOMMatrix.)
+       (fn [{{:keys [minx miny maxx maxy]} :bb}]
+         (.drawImage ctx
+                     sprites
+                     sx sy
+                     sw sh
+                     minx miny
+                     (- maxx minx)
+                     (- maxy miny))))))))
 
 (defn rect [bb-thunk]
   (object
@@ -151,3 +162,17 @@
         (js/DOMMatrix.)
         (fn [{:keys [mat]}]
           (run! plot-object (map #(transform % mat) derefd))))))))
+
+(defn center [obj & axes]
+  (let [axis? (set axes)]
+    (update
+     obj
+     :thunk
+     (fn [thunk]
+       (fn []
+         (let [cw (.-width canvas), ch (.-height canvas)
+               {{:keys [minx miny maxx maxy]} :bb, :as drfd} (thunk)]
+           (translate
+            drfd
+            (if (axis? :x) (/ (- cw (- maxx minx)) 2) 0)
+            (if (axis? :y) (/ (- ch (- maxy miny)) 2) 0))))))))

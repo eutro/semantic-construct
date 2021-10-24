@@ -33,10 +33,13 @@
             (state/escape!))
         game))))
 
+(defn go-back! []
+  (reset! state/state {:screen {:type :load}})
+  (state/escape!))
+
 (defn back-listener [game {id :target}]
   (if (-> game :properties :id-to-props (get id) :type (= :back-button))
-    (do (reset! state/state {:screen {:type :load}})
-        (state/escape!))
+    (go-back!)
     game))
 
 (defn level-from-raw
@@ -50,8 +53,8 @@
              (if-not text
                $
                (game/conj-object
-                $ {:type :explanatory-text, :text text} {:pos [70 30]}))
-             (game/conj-object $ {:type :back-button} {:pos [10 30]})
+                $ {:type :explanatory-text, :text text} {:pos [50 30]}))
+             (game/conj-object $ {:type :back-button} {:pos [10 10]})
              (eng/add-listener $ :click back-listener)
              (eng/on-change $))})))
 
@@ -68,7 +71,8 @@
     {:text "You wonder what happens if you quote words."
      :rules [["there" "is"]
              ["win" "when"]]
-     :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}]
+     :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}
+    {:text "Huh"}]
    (into [] (map-indexed level-from-raw))))
 
 (def finished-game-level
@@ -102,6 +106,10 @@
       (let [pos (gen-pos)]
         (swap! *game set-pos id pos)
         pos)))
+
+(def arrow-back (js/document.getElementById "arrow_back"))
+(defn back-button []
+  (r/sprite-object arrow-back))
 
 (defn objects-for [*game id]
   (let [id-to-props (-> @*game :properties :id-to-props)
@@ -140,14 +148,11 @@
                                       ((if had
                                          :colour
                                          :not-had-colour))))))
-       :back-button (-> (r/text "back")
-                        (r/obj-with-bindings
-                         :font "20px sans"
-                         :fillStyle "#00ff00"))
+       :back-button (back-button)
        :explanatory-text (-> (r/text (:text props))
                              (r/obj-with-bindings
-                              :font "20px sans"
-                              :fillStyle "white"))
+                              :font (-> theme/theme :game :explanatory-text :font)
+                              :fillStyle (-> theme/theme :game :explanatory-text :colour)))
 
        (throw (ex-info "No renderer for type" {:type (:type props)})))
      translate-to-pos
@@ -398,20 +403,29 @@
    state/state
    {:screen {:type :level-select
              :scene (r/->Scene
-                     (into [(r/obj-with-bindings r/fill :fillStyle (:background theme/theme))]
-                           (map-indexed
-                            (fn [i lvl]
-                              (->
-                               (ui/menu-button
-                                (str i)
-                                (fn [] (set-level! i))
-                                50
-                                50
-                                (* (inc (quot i 3)) 60)
-                                (* (inc (mod i 3)) 60))
-                               (r/obj-with-bindings
-                                :textAlign "center"))))
-                           levels))}
+                     (let [size 50
+                           cell-size (+ size 10)
+                           grid-w 3
+                           start-y 100]
+                       (into [(r/obj-with-bindings r/fill :fillStyle (:background theme/theme))
+                              (-> (back-button)
+                                  (r/translate 10 10)
+                                  (assoc :on-click go-back!))]
+                             (map-indexed
+                              (fn [i lvl]
+                                (->
+                                 (ui/menu-button
+                                  (str i)
+                                  (fn [] (set-level! i))
+                                  size size
+                                  0 start-y)
+                                 (r/obj-with-bindings
+                                  :textAlign "center")
+                                 (r/center :x)
+                                 (r/translate
+                                  (* (- (mod i grid-w) (/ (dec grid-w) 2)) cell-size)
+                                  (* (quot i grid-w) cell-size)))))
+                             levels)))}
     :listeners {:click [ui/on-click]}})
   (screen/redraw))
 
