@@ -48,6 +48,9 @@
   [(thing-by-types #{"object"}
                    #{"objects"}
                    #{:square :circle :triangle :victory})
+   (thing-by-types #{"shape"}
+                   #{"shapes"}
+                   #{:square :circle :triangle})
    (thing-by-types #{"square"}
                    #{"squares"}
                    #{:square})
@@ -284,6 +287,6 @@
   (-> (s/new-game)
       (s/add-init-rules ["win" "when" "\"" "pressed" "\"" "is" "pressed"])
       (e/on-change))
-  (atn/parse-and-suggest atn ["win" "when" "there" "are" "zero" "triangles"])
+  (atn/parse-and-suggest atn ["win" "when" "there" "are" "zero" "shapes"])
   ;;
   )
