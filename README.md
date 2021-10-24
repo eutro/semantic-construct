@@ -5,15 +5,17 @@
 >
 > \- John 1:1-3
 
-Semantic Construct is a puzzle game about building the world with words.
+Semantic Construct is a puzzle game about building a world with words.
 
 ## Overview
 
 You can play [here](https://eutro.github.io/semantic-construct).
 
-Drag around words to create and modify the very rules of the world.
+Rules are written in relatively simple and mostly correct English:
+![Simple English](resources/public/screenshots/simple_english_tm.png)
 
-TODO: screenshots
+Drag around words to create and modify the very rules of the world:
+![Helpful Hints](resources/public/screenshots/helpful_hints_tm.png)
 
 ## Setup
 
