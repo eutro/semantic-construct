@@ -153,17 +153,20 @@
          words words
          quoting []]
     (if-let [[word next-word] (seq words)]
-      (m/match [[word next-word]]
-        [([_ (:or "\"" "'")] :guard #(= next-word (peek quoting)))]
+      (cond
+        (= next-word (peek quoting))
         (recur (conj out word) (next words) quoting)
-        [[(:or "\"" "'") _]]
+
+        (#{"\"" "'"} word)
         (if (= word (peek quoting))
           (recur (conj out (if (no-space-after? next-word) word (str word " ")))
                  (next words)
                  (pop quoting))
           (recur (conj out word) (next words) (conj quoting word)))
-        [[_ _] :guard #(no-space-after? next-word)]
+
+        (no-space-after? next-word)
         (recur (conj out word) (next words) quoting)
+
         :else (recur (conj out (str word " ")) (next words) quoting))
       out)))
 
