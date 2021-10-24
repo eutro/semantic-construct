@@ -3,7 +3,8 @@
             [semantic-construct.render :as r]
             [semantic-construct.state :as state]
             [semantic-construct.screen.screen :as scr]
-            [semantic-construct.screen.screens]))
+            semantic-construct.screen.main-menu
+            semantic-construct.screen.level))
 
 (defn resize-canvas-to-window []
   (doto r/canvas
