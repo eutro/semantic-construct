@@ -46,7 +46,8 @@
                 :compiler {:output-to "resources/public/js/compiled/semantic_construct.js"
                            :main semantic-construct.core
                            :externs ["externs.js"]
-                           :optimizations :advanced
+                           :optimizations :simple ;; :advanced can't behave >:(
+                           :optimize-constants true
                            :pretty-print false}}]}
 
   :figwheel {;; :http-server-root "public" ;; default and assumes "resources"
