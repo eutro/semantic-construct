@@ -1,5 +1,6 @@
 (ns semantic-construct.core
-  (:require [cljs.core.async :as a :refer-macros [go]]
+  (:require semantic-construct.include
+            [cljs.core.async :as a :refer-macros [go]]
             [semantic-construct.render :as r]
             [semantic-construct.state :as state]
             [semantic-construct.screen.screen :as scr]
