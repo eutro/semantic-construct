@@ -142,19 +142,19 @@
 
    :WHEN {:s
           {:trans {"when" [:s1 (fn [reg it] reg)]},
-           :cats [[:ACTION-THAT-CAN-BE-DONE
+           :cats [[:ACTION
                    :p1
                    (fn [reg it] (assoc reg :action it))]]},
           :s1
-          {:cats [[:THING-THAT-CAN-HAPPEN
+          {:cats [[:CONDITION
                    :s2
                    (fn [reg it] (assoc reg :event it))]]},
           :s2 {:trans {"," [:s3 (fn [reg it] reg)]}},
-          :s3 {:cats [[:ACTION-THAT-CAN-BE-DONE
+          :s3 {:cats [[:ACTION
                        :e
                        (fn [reg it] (assoc reg :action it))]]},
           :p1 {:trans {"when" [:p2 (fn [reg it] reg)]}},
-          :p2 {:cats [[:THING-THAT-CAN-HAPPEN
+          :p2 {:cats [[:CONDITION
                        :e
                        (fn [reg it] (assoc reg :event it))]]},
           :e {:pop (fn [reg] {:type :when, :event (:event reg), :action (:action reg)})}},
@@ -169,26 +169,56 @@
     :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
     :e {:pop :thing}}
 
-   :THING-THAT-CAN-HAPPEN
-   {:s {:cats [[:REFERENCE :refd (fn [reg it] (assoc reg :refd it)) nil]]},
+   :BOOLEAN-EXPR
+   {:s {:epsilons [[:s1 (fn [reg] (assoc reg :there-is/bool true))]]}
+    :s1 {:cats [[:THERE-IS :s2 (fn [reg it] (assoc reg :cond it))]]}
+    :s2 {:pop :cond}}
+
+   :CONDITION
+   {:s {:cats [[:REFERENCE :refd (fn [reg it] (assoc reg :refd it))]
+               [:BOOLEAN-EXPR :bool (fn [reg it] (assoc reg :bool it))]]},
     :refd {:trans {"is" [:is (fn [reg it] reg)]}}
     :is {:trans {"pressed" [:pop (fn [reg it]
                                    {:type :click
-                                    :receiver (:refd reg)})]}}}
+                                    :receiver (:refd reg)})]}}
+    :bool {:pop (fn [reg]
+                  {:type :tick
+                   :pred (:cond reg)})}}
 
-   :ACTION-THAT-CAN-BE-DONE {:s {:trans {"win" [:pop (constantly {:type :win})]}}},
+   :ACTION
+   {:s {:trans {"win" [:pop (constantly {:type :win})]}}},
+
+   :PREFIX-CMP
+   {:s {:trans {"less" [:than (fn [reg it] (assoc reg :cmp <))]
+                "more" [:than (fn [reg it] (assoc reg :cmp >))]
+                "at" [:at (fn [reg it] reg)]}}
+    :at {:trans {"least" [:pop (fn [reg it] (assoc reg :cmp >=))]
+                 "most" [:pop (fn [reg it] (assoc reg :cmp <=))]}}
+    :than {:trans {"than" [:pop (fn [reg it] (:cmp reg))]}}}
 
    :THERE-IS
    {:s {:trans {"there" [:s1 (fn [reg it] reg)]}},
     :s1 {:trans {"is" [:s2 (fn [reg it] (assoc reg :count 1))],
                  "are" [:a1 (fn [reg it] reg)]}},
-    :a1 {:cats [[:NATURAL :a2 (fn [reg it] (assoc reg :count it)) nil]]},
+    :a1 {:cats [[:NATURAL :a2 (fn [reg it] (assoc reg :count it)) nil]]
+         :dyn (fn [reg]
+                (when (and (:there-is/bool reg) (not (:cmp reg)))
+                  {:cats [[:PREFIX-CMP :a1 (fn [reg it] (assoc reg :cmp it))]]}))},
     :a2 {:epsilons [[:s3 identity (fn [reg] (not= 1 (:count reg)))]]},
     :s2 {:trans {"a" [:s3 (fn [reg it] (assoc reg :count 1))],
                  "an" [:s3 (fn [reg it] (assoc reg :count 1))],
-                 "one" [:s3 (fn [reg it] (assoc reg :count 1))]}},
+                 "one" [:s3 (fn [reg it] (assoc reg :count 1))]}
+         :dyn (fn [reg]
+                (when (and (:there-is/bool reg) (not (:cmp reg)))
+                  {:cats [[:PREFIX-CMP :s2 (fn [reg it] (assoc reg :cmp it))]]}))},
     :s3 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]},
-    :e {:epsilons [[:e1 identity (fn [reg] (:ctor (:thing reg)))]]}
+    :e {:dyn (fn [reg]
+               {:epsilons (if (:there-is/bool reg)
+                            [[:b identity (fn [reg] (:cmp reg))]]
+                            [[:e1 identity (fn [reg] (:ctor (:thing reg)))]])})}
+    :b {:pop
+        (fn [{{:keys [product]} :thing, n :count, :keys [cmp]}]
+          (fn [] (cmp (count (product-all product)) n)))}
     :e1 {:pop
          (fn [reg]
            {:type :repeat,
@@ -251,9 +281,8 @@
   (require '[semantic-construct.game.state :as s]
            '[semantic-construct.game.engine :as e])
   (-> (s/new-game)
-      (s/add-init-rules ["there" "are" "two" "\"" "pressed" "\""]
-                        ["win" "when" "\"" "pressed" "\"" "is" "pressed"])
-      (e/on-change)
-      (e/dispatch-event :click {:target 5}))
+      (s/add-init-rules ["win" "when" "\"" "pressed" "\"" "is" "pressed"])
+      (e/on-change))
+  (atn/parse-and-suggest atn ["win" "when" "there" "are" "at" "least" "zero" "triangles"])
   ;;
   )

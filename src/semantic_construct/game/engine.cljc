@@ -9,7 +9,10 @@
   [action]
   (m/match action
     {:type :win}
-    (fn [game & _] (s/conj-object game {:type :victory, :had true}))
+    (fn [game & _]
+      (binding [f/*vars* (assoc f/*vars* :game game)]
+        (when-not (seq (f/prop-intersection [:type :victory] [:had true]))
+          (s/conj-object game {:type :victory, :had true}))))
 
     :else (throw (ex-info "Unrecognised action" {:action action}))))
 
@@ -24,8 +27,8 @@
 (defn listener-apply [event listener]
   (fn reapply [game]
     ;; removing listeners should not undo actions done by it
-    [(fn [game] [reapply (remove-listener game :click listener)])
-     (add-listener game :click listener)]))
+    [(fn [game] [reapply (remove-listener game event listener)])
+     (add-listener game event listener)]))
 
 (defn comp-apply
   ([] nil)
@@ -66,6 +69,27 @@
              (s/disj-object game id)]))
         game]))))
 
+(defn compile-event [event action-fn]
+  (m/match event
+    {:type :click, :receiver target}
+    (listener-apply
+     :click
+     (fn [game {evt-target :target}]
+       (if (binding [f/*vars* (assoc f/*vars* :game game)]
+             (target evt-target))
+         (action-fn game {:target evt-target})
+         game)))
+
+    {:type :tick, :pred pred}
+    (listener-apply
+     :tick
+     (fn [game _]
+       (if (binding [f/*vars* (assoc f/*vars* :game game)] (pred))
+         (action-fn game {})
+         game)))
+
+    :else (throw (ex-info "Unrecognised event" {:event event}))))
+
 (defn parse->apply [parse]
   (m/match parse
     {:type :compose, :composed composed}
@@ -78,18 +102,7 @@
     (add-application props)
 
     {:type :when, :event event, :action action}
-    (let [action-fn (compile-action action)]
-      (m/match event
-        {:type :click, :receiver target}
-        (listener-apply
-         :click
-         (fn [game {evt-target :target}]
-           (if (binding [f/*vars* (assoc f/*vars* :game game)]
-                 (target evt-target))
-             (action-fn game {:target evt-target})
-             game)))
-
-        :else (throw (ex-info "Unrecognised event" {:event event}))))
+    (compile-event event (compile-action action))
 
     :else (throw (ex-info "Unrecognised rule" {:rule parse}))))
 
