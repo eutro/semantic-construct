@@ -1,9 +1,8 @@
 (ns semantic-construct.theme)
 
 (def theme
-  {:background "#2f2f2f"
-   :button {:normal "#00ff00"
-            :hover "#008800"
+  {:background "#1f1f1f"
+   :button {:normal "#bb4400"
             :text {:colour "#ffffff"
                    :font "50px sans"}}
    :game
