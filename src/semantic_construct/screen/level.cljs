@@ -1,5 +1,5 @@
 (ns semantic-construct.screen.level
-  (:require-macros [semantic-construct.include :as incl])
+  (:require-macros [semantic-construct.include :refer [include includev includev*]])
   (:require [semantic-construct.screen.screen :as screen]
             [semantic-construct.screen.ui :as ui]
             [semantic-construct.mouse :as mouse]
@@ -61,11 +61,11 @@
 
 (def levels
   (->>
-   (incl/includev (incl/include "levels/manifest.edn"))
+   (includev* "levels/manifest.edn")
    (into [] (map-indexed level-from-raw))))
 
 (def finished-game-level
-  (incl/include "levels/lvl-finished.edn"))
+  (include "levels/lvl-finished.edn"))
 
 (defn gen-pos []
   [(Math/round (rand (.-width r/canvas)))

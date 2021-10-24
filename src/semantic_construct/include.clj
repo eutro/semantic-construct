@@ -18,3 +18,6 @@
 
 (defmacro includev [srcs]
   (read-srcs srcs))
+
+(defmacro includev* [src]
+  (read-srcs (read-src src)))
