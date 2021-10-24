@@ -127,7 +127,7 @@
        :victory (let [had (:had props)]
                   (-> (r/text (if (:had props)
                                 "victory (click to continue)"
-                                "victory (not had)"))
+                                "fool's victory"))
                       (r/obj-with-bindings
                        :font (-> theme/theme :game :victory :font)
                        :fillStyle (-> theme/theme :game :victory
