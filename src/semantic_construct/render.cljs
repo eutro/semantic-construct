@@ -33,7 +33,10 @@
 (defprotocol Transform
   (transform [this matrix]))
 
-(def identity-matrix (translation 0 0))
+(def identity-matrix
+  (->Matrix
+   1 0 0
+   0 1 0))
 
 (defn translation [dx dy]
   (->Matrix
