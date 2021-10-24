@@ -1,4 +1,4 @@
-(ns semantic-construct.screen.main-menu
+(ns semantic-construct.screen.menu
   (:require [semantic-construct.screen.screen :as screen]
             [semantic-construct.screen.ui :as ui]
             [semantic-construct.mouse :as mouse]
