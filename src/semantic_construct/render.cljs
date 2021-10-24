@@ -121,7 +121,6 @@
       (.restore ctx)))
   nil)
 
-(def sprites (js/document.getElementById "sprites"))
 (defn sprite-object
   ([sprites] (sprite-object sprites 0 0 (.-width sprites) (.-height sprites)))
   ([sprites sx sy sw sh]
