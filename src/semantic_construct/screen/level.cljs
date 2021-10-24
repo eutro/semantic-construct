@@ -10,7 +10,7 @@
             [semantic-construct.game.feature :as feature]
             [clojure.core.match :as m]))
 
-(defrecord Level [game engine base-scene])
+(defrecord Level [game base-scene])
 
 (def base-scene
   (r/->Scene
@@ -23,69 +23,32 @@
        :fillStyle "white")
       (r/transform (r/translation 10 30))))
 
+(defn level-from-raw
+  [{:keys [text rules words objects]}]
+  (map->Level
+   {:game (as-> (apply game/new-game objects) $
+            (apply game/add-init-rules $ rules)
+            (apply game/add-init-words $ words)
+            (eng/on-change $))
+    :base-scene (if text
+                  (update base-scene :objects conj (textbox text))
+                  base-scene)}))
+
 (def levels
-  [(let [engine
-         (eng/features->engine
-          feature/TheGame
-          feature/Button)]
-     (map->Level
-      {:engine engine
-       :game
-       (-> (game/new-game)
-           (game/add-init-rules
-            ["there" "is" "a" "button"]
-            ["when" "the" "button" "is" "pressed" "," "win"])
-           (eng/on-change engine))
-       :base-scene
-       (update base-scene
-               :objects
-               into
-               [(textbox "The rules are self-explanatory:")])}))
-
-   (let [engine
-         (eng/features->engine
-          feature/TheGame
-          feature/Natural
-          feature/Win
-          feature/Button)]
-     (map->Level
-      {:engine engine
-       :game
-       (-> (game/new-game)
-           (game/add-init-rules
-            ["there"]
-            ["win" "when"])
-           (game/add-init-words
-            "are" "two" "a" "buttons"
-            "button" "button" "the" "is" "pressed")
-           (eng/on-change engine))
-       :base-scene
-       (update base-scene
-               :objects
-               into
-               [(textbox "Feel free to change the rules, though.")])}))
-
-   (let [engine
-         (eng/features->engine
-          feature/TheGame
-          feature/Natural
-          feature/Win
-          feature/Button)]
-     (map->Level
-      {:engine engine
-       :game
-       (-> (game/new-game)
-           (game/add-init-rules
-            ["there" "is"]
-            ["win" "when"])
-           (game/add-init-words
-            "are" "two" "a" "\"" "\"" "'" "'" "an" "pressed")
-           (eng/on-change engine))
-       :base-scene
-       (update base-scene
-               :objects
-               into
-               [(textbox "Quotation marks seem handy...")])}))])
+  (->>
+   [{:text "The rules are self-explanatory:"
+     :rules [["there" "is" "a" "button"]
+             ["when" "the" "button" "is" "pressed" "," "win"]]}
+    {:text "Feel free to change the rules, though."
+     :rules [["there"]
+             ["win" "when"]]
+     :words ["are" "two" "a" "buttons"
+             "button" "button" "the" "is" "pressed"]}
+    {:text "You wonder what happens if you quote words."
+     :rules [["there" "is"]
+             ["win" "when"]]
+     :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}]
+   (mapv level-from-raw)))
 
 (defn gen-pos []
   (Math/round (rand 160000)))
@@ -229,7 +192,7 @@
            :level (assoc level :game @*game))))
 
 (defn level-changes [level]
-  (update level :game eng/on-change (:engine level)))
+  (update level :game eng/on-change))
 
 (defn check-changes! []
   (swap! state/state update-in [:screen :level] level-changes)
@@ -244,12 +207,11 @@
               (-> @state/state :screen :scene r/under-mouse))
         clicked (disj clicked (-> @state/state :screen :just-moved))]
     (when-some [[clicked-id] (seq clicked)]
-      (eng/with-engine (-> @state/state :screen :level :engine)
-        (swap! state/state update-in
-               [:screen :level :game]
-               eng/dispatch-event
-               :click
-               {:target clicked-id}))
+      (swap! state/state update-in
+             [:screen :level :game]
+             eng/dispatch-event
+             :click
+             {:target clicked-id})
       (check-changes!))))
 
 (defn on-down [evt]
@@ -282,8 +244,7 @@
       (when (<= 100 dist-sq)
         (swap! state/state update :screen assoc :just-moved id)
         (let [game
-              (eng/with-engine (-> @state/state :screen :level :engine)
-                (eng/dispatch-event game :move {:target id}))
+              (eng/dispatch-event game :move {:target id})
               id-to-props (-> game :properties :id-to-props)
               props (id-to-props id)
               scene (-> @state/state :screen :scene)

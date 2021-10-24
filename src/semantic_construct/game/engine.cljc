@@ -1,5 +1,4 @@
 (ns semantic-construct.game.engine
-  #?(:cljs (:require-macros [semantic-construct.game.engine :refer [with-engine]]))
   (:require [semantic-construct.parser.atn :as atn]
             [semantic-construct.game.feature :as f]
             [semantic-construct.game.state :as s]
@@ -185,51 +184,21 @@
             game (reduce normalise-rule-indices game rule-ids)]
         game))))
 
-(defrecord Engine [atn vars])
-
-(defn call-with-engine [engine f]
-  (binding [f/*vars* (:vars engine)]
-    (f)))
-
-(defmacro with-engine [engine & body]
-  `(call-with-engine ~engine (fn [] ~@body)))
-
 (defn dispatch-event [game event payload]
   (reduce (fn [game listener] (listener game payload))
           game
           (-> game :listeners (get event))))
 
-(defn on-change [game engine]
-  (with-engine engine
-    (-> game
-        (reparse-rules (:atn engine))
-        (dispatch-event :tick nil))))
-
-(defn merge-vars! [vars defs]
-  (reduce (fn [vars [key [merge-fn value]]]
-            (if-let [old-val (get vars key)]
-              (assoc! vars key (merge-fn old-val value))
-              (assoc! vars key value)))
-          vars
-          defs))
-
-(defn features->engine [& features]
-  (map->Engine
-   {:atn (into {} (comp (map :atn) cat) features)
-    :vars (persistent!
-           (transduce
-            (map :defs)
-            (completing merge-vars!)
-            (transient {})
-            features))}))
+(defn on-change [game]
+  (-> game
+      (reparse-rules f/atn)
+      (dispatch-event :tick nil)))
 
 (comment
-  (let [engine (features->engine f/TheGame f/Button)]
-    (with-engine engine
-      (-> (s/new-game)
-          (s/add-init-rules ["there" "is" "a" "button"]
-                            ["when" "the" "button" "is" "pressed" "," "win"])
-          (on-change engine)
-          (dispatch-event :click {:target 13}))))
+  (-> (s/new-game)
+      (s/add-init-rules ["there" "is" "a" "button"]
+                        ["when" "the" "button" "is" "pressed" "," "win"])
+      (on-change engine)
+      (dispatch-event :click {:target 13}))
   ;
   )
