@@ -45,6 +45,7 @@
                 :source-paths ["src"]
                 :compiler {:output-to "resources/public/js/compiled/semantic_construct.js"
                            :main semantic-construct.core
+                           :externs ["externs.js"]
                            :optimizations :advanced
                            :pretty-print false}}]}
 
