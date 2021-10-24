@@ -1,0 +1,2 @@
+{:rules [["win" "when" "any"]]
+ :words ["all" "words" "there" "are" "two" "\"" "\"" "'" "'"]}
