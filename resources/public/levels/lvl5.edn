@@ -1,0 +1,4 @@
+{:rules [["there" "are"]
+         ["are" "there"]
+         ["when" "there"]]
+ :words ["five" "are" "four" "eight" "\"" "'" "\"" "'" "win"]}

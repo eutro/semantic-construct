@@ -11,7 +11,8 @@
     {:type :win}
     (fn [game & _]
       (binding [f/*vars* (assoc f/*vars* :game game)]
-        (when-not (seq (f/prop-intersection [:type :victory] [:had true]))
+        (if (seq (f/prop-intersection [:type :victory] [:had true]))
+          game
           (s/conj-object game {:type :victory, :had true}))))
 
     :else (throw (ex-info "Unrecognised action" {:action action}))))
