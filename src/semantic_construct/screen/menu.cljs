@@ -1,10 +1,12 @@
 (ns semantic-construct.screen.menu
-  (:require [semantic-construct.screen.screen :as screen]
+  (:require [clojure.core.async :as a]
+            [semantic-construct.screen.screen :as screen]
             [semantic-construct.screen.ui :as ui]
             [semantic-construct.mouse :as mouse]
             [semantic-construct.state :as state]
             [semantic-construct.theme :as theme]
-            [semantic-construct.render :as r]))
+            [semantic-construct.render :as r]
+            [semantic-construct.audio :as audio]))
 
 (defn force-load [])
 
@@ -27,11 +29,24 @@
                   (r/center :x))
               (-> (ui/menu-button
                    "Source Code"
-                   (fn open-source []
+                   (fn []
                      (js/window.open "https://github.com/eutro/semantic-construct"))
                    0 340)
+                  (r/center :x))
+              (-> (ui/menu-button
+                   "Toggle Music"
+                   (fn []
+                     (some-> (audio/toggle-track! audio/loop1)
+                             .then
+                             (.err (fn [e] (js/alert (str "Can't play music: " e))))))
+                   0 440)
                   (r/center :x))])}
    :listeners {:click [ui/on-click]}})
+
+(defonce start-music
+  (do
+    (some-> (audio/toggle-track! audio/loop1) .then)
+    true))
 
 (defmethod screen/draw-screen :load [_]
   (reset! state/state default-state)
