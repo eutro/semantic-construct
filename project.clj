@@ -40,8 +40,8 @@
                            :preloads [devtools.preload]}}
                ;; This next build is a compressed minified build for
                ;; production. You can build this with:
-               ;; lein cljsbuild once min
-               {:id "min"
+               ;; lein cljsbuild once prod
+               {:id "prod"
                 :source-paths ["src"]
                 :compiler {:output-to "resources/public/js/compiled/semantic_construct.js"
                            :main semantic-construct.core
