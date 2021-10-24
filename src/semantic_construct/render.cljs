@@ -112,6 +112,39 @@
         ;; the matrix is already captured in the bb
         (.fillRect ctx minx miny (- maxx minx) (- maxy miny)))))))
 
+(defn ellipse [bb-thunk]
+  (object
+   (fn []
+     (->InCtxRenderObject
+      (bb-thunk)
+      (js/DOMMatrix.)
+      (fn [{{:keys [minx miny maxx maxy]} :bb}]
+        (doto ctx
+          .beginPath
+          (.ellipse
+           (/ (+ maxx minx) 2)
+           (/ (+ maxy miny) 2)
+           (/ (- maxx minx) 2)
+           (/ (- maxy miny) 2)
+           #_:rotation 0
+           #_:start 0
+           #_:end (* 2 Math/PI))
+          .fill))))))
+
+(defn triangle [bb-thunk]
+  (object
+   (fn []
+     (->InCtxRenderObject
+      (bb-thunk)
+      (js/DOMMatrix.)
+      (fn [{{:keys [minx miny maxx maxy]} :bb}]
+        (doto ctx
+          .beginPath
+          (.moveTo minx maxy)
+          (.lineTo (/ (+ maxx minx) 2) miny)
+          (.lineTo maxx maxy)
+          .fill))))))
+
 (defn stroke-rect [bb-thunk]
   (object
    (fn []
@@ -176,3 +209,16 @@
             drfd
             (if (axis? :x) (/ (- cw (- maxx minx)) 2) 0)
             (if (axis? :y) (/ (- ch (- maxy miny)) 2) 0))))))))
+
+(defn truncate-inbounds [obj]
+  (update
+   obj
+   :thunk
+   (fn [thunk]
+     (fn []
+       (let [{{:keys [minx miny maxx maxy]} :bb, :as drfd} (thunk)
+             w (.-width canvas)
+             h (.-height canvas)
+             dx (max (- minx) (min 0 (- w maxx)))
+             dy (max (- miny) (min 0 (- h maxy)))]
+         (translate drfd dx dy))))))

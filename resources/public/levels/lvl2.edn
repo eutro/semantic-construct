@@ -1,5 +1,5 @@
 {:text "Feel free to change the rules, though."
  :rules [["there"]
          ["win" "when"]]
- :words ["are" "two" "a" "buttons"
-         "button" "button" "the" "is" "pressed"]}
+ :words ["are" "two" "a" "circles"
+         "circle" "circle" "the" "is" "pressed"]}
