@@ -1,4 +1,5 @@
 (ns semantic-construct.screen.level
+  (:require-macros semantic-construct.include)
   (:require [semantic-construct.screen.screen :as screen]
             [semantic-construct.screen.ui :as ui]
             [semantic-construct.mouse :as mouse]
@@ -60,26 +61,13 @@
 
 (def levels
   (->>
-   [{:text "The rules are self-explanatory:"
-     :rules [["there" "is" "a" "button"]
-             ["when" "the" "button" "is" "pressed" "," "win"]]}
-    {:text "Feel free to change the rules, though."
-     :rules [["there"]
-             ["win" "when"]]
-     :words ["are" "two" "a" "buttons"
-             "button" "button" "the" "is" "pressed"]}
-    {:text "You wonder what happens if you quote words."
-     :rules [["there" "is"]
-             ["win" "when"]]
-     :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}
-    {:text "Huh"}]
+   #include/includev
+   #include/include
+   "levels/manifest.edn"
    (into [] (map-indexed level-from-raw))))
 
 (def finished-game-level
-  (level-from-raw
-   {:text "You have finished the game!"
-    :rules [[]]
-    :words ["well" "done"]}))
+  #include/include "levels/lvl-finished.edn")
 
 (defn gen-pos []
   (Math/round (rand 160000)))

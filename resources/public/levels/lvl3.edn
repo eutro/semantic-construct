@@ -1,0 +1,4 @@
+{:text "You wonder what happens if you quote words."
+ :rules [["there" "is"]
+         ["win" "when"]]
+ :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}
