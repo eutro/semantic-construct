@@ -38,7 +38,7 @@
                    (fn []
                      (some-> (audio/toggle-track! audio/loop1)
                              .then
-                             (.err (fn [e] (js/alert (str "Can't play music: " e))))))
+                             (.catch (fn [e] (js/alert (str "Can't play music: " e))))))
                    0 440)
                   (r/center :x))])}
    :listeners {:click [ui/on-click]}})

@@ -38,11 +38,11 @@
   (some (partial apply prop-all?) product))
 
 (defn thing-by-types [singular plural types & {:as ctor-props}]
-  (let [product (into #{} (map (fn [ty] (merge ctor-props {:type ty}))) types)]
+  (let [product (into #{} (map (fn [ty] {:type ty})) types)]
     (map->Thing
      {:words (fn [count] (if (= 1 count) singular plural))
       :product product
-      :ctor (when (= 1 (count product)) (first product))})))
+      :ctor (when (= 1 (count product)) (merge ctor-props (first product)))})))
 
 (def things-that-exist
   [(thing-by-types #{"object"}
@@ -60,6 +60,10 @@
    (thing-by-types #{"triangle"}
                    #{"triangles"}
                    #{:triangle})
+   (thing-by-types #{"word"}
+                   #{"words"}
+                   #{:word}
+                   :value "God")
    ;; "there is a win" because everybody is going to try it
    (thing-by-types #{"win"}
                    #{"wins"}
@@ -162,18 +166,34 @@
                        (fn [reg it] (assoc reg :event it))]]},
           :e {:pop (fn [reg] {:type :when, :event (:event reg), :action (:action reg)})}},
 
-   :UNIVERSAL-REFERENCE
+   :UNIVERSAL-QUANTIFICATION
    {:s {:trans {"all" [:s1 (fn [reg it] (assoc reg :count ##Inf))]}}
-    :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
-    :e {:pop :thing}}
+    :s1 {:cats [[:THING :s2 (fn [reg it] (assoc reg :forall it))]]}
+    :s2 {:trans {"are" [:s3 (fn [reg it] reg)]}}
+    :s3 {:cats [[:THING :e (fn [reg it] (assoc reg :is it))]]}
+    :e {:pop (fn [{:keys [forall is]}]
+               (fn []
+                 (let [inset (product-all (:product forall))
+                       predset (product-all (:product is))]
+                   (set/subset? inset predset))))}}
 
-   :EXISTENTIAL-REFERENCE
+   :EXISTENTIAL-QUANTIFICATION
    {:s {:trans {"any" [:s1 (fn [reg it] (assoc reg :count 1))]}}
-    :s1 {:cats [[:THING :e (fn [reg it] (assoc reg :thing it))]]}
-    :e {:pop :thing}}
+    :s1 {:cats [[:THING :s2 (fn [reg it] (assoc reg :exists it))]]}
+    :s2 {:trans {"is" [:s3 (fn [reg it] reg)]}}
+    :s3 {:trans {"a" [:s4 (fn [reg it] reg)]
+                 "an" [:s4 (fn [reg it] reg)]}}
+    :s4 {:cats [[:THING :e (fn [reg it] (assoc reg :such-that it))]]}
+    :e {:pop (fn [{:keys [exists such-that]}]
+               (fn []
+                 (let [inset (product-all (:product exists))
+                       predset (product-all (:product such-that))]
+                   (boolean (seq (set/intersection inset predset))))))}}
 
    :BOOLEAN-EXPR
-   {:s {:epsilons [[:s1 (fn [reg] (assoc reg :there-is/bool true))]]}
+   {:s {:epsilons [[:s1 (fn [reg] (assoc reg :there-is/bool true))]]
+        :cats [[:EXISTENTIAL-QUANTIFICATION :s2 (fn [reg it] (assoc reg :cond it))]
+               [:UNIVERSAL-QUANTIFICATION :s2 (fn [reg it] (assoc reg :cond it))]]}
     :s1 {:cats [[:THERE-IS :s2 (fn [reg it] (assoc reg :cond it))]]}
     :s2 {:pop :cond}}
 
@@ -284,9 +304,10 @@
 (comment
   (require '[semantic-construct.game.state :as s]
            '[semantic-construct.game.engine :as e])
-  (-> (s/new-game)
-      (s/add-init-rules ["win" "when" "\"" "pressed" "\"" "is" "pressed"])
-      (e/on-change))
-  (atn/parse-and-suggest atn ["win" "when" "there" "are" "zero" "shapes"])
+  (binding [*vars*
+            (assoc *vars* :game
+                   (-> (s/new-game)
+                       (s/add-init-rules ["win" "when" "all" "\"" "win" "\"" "are" "words"])
+                       (e/on-change)))])
   ;;
   )
