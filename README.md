@@ -1,4 +1,4 @@
-![Semantic Construct](resources/public/assets/logo.png)
+![Semantic Construct](resources/public/assets/logo.svg)
 
 > _In the beginning was the Word, and the Word was with God, and the Word was God. [...]
 > Through him all things were made; without him nothing was made that has been made._
