@@ -1,1 +1,3 @@
-{:rules [["there" "is" "a" "triangle"]]}
+{:rules [["there" "are" "two" "triangles"]
+         ["win" "when"]]
+ :words ["at" "least" "zero"]}
