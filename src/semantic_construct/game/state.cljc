@@ -55,8 +55,11 @@
         game (assoc-props game id props)]
     [game id]))
 
-(defn conj-object [game props]
-  (first (conj-object-for-id game props)))
+(defn conj-object
+  ([game props] (first (conj-object-for-id game props)))
+  ([game props intrinsics]
+   (let [[game id] (conj-object-for-id game props)]
+     (assoc-in game [:properties :intrinsics id] intrinsics))))
 
 (defn obj-props [game id]
   (let [props (:properties game)]
@@ -66,7 +69,7 @@
 (defn obj-set-props [game id props]
   (-> game
       (assoc-props id (:visible props))
-      (update-in [:intrinsics id] (:intrinsics props))))
+      (update-in [:properties :intrinsics id] (:intrinsics props))))
 
 (defn disj-object [game id]
   (-> game

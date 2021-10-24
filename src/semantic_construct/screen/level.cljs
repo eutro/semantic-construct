@@ -10,29 +10,50 @@
             [semantic-construct.game.feature :as feature]
             [clojure.core.match :as m]))
 
-(defrecord Level [game base-scene])
+(defrecord Level [game])
 
 (def base-scene
   (r/->Scene
    [(r/obj-with-bindings r/fill :fillStyle (:background theme/theme))]))
 
-(defn textbox [text]
-  (-> (r/text text)
-      (r/obj-with-bindings
-       :font "20px sans"
-       :fillStyle "white")
-      (r/transform (r/translation 10 30))))
+(defn push-history! [entry]
+  (swap! state/state update :screen
+         (fn [screen]
+           (-> screen
+               (update :history conj entry)
+               (dissoc :redo-history)))))
+
+(declare set-level!)
+(defn win-listener [n]
+  (fn [game {id :target}]
+    (let [props (get-in game [:properties :id-to-props id])]
+      (if (and (= (:type props) :victory)
+               (:had props))
+        (do (set-level! (inc n))
+            (state/escape!))
+        game))))
+
+(defn back-listener [game {id :target}]
+  (if (-> game :properties :id-to-props (get id) :type (= :back-button))
+    (do (reset! state/state {:screen {:type :load}})
+        (state/escape!))
+    game))
 
 (defn level-from-raw
-  [{:keys [text rules words objects]}]
-  (map->Level
-   {:game (as-> (apply game/new-game objects) $
-            (apply game/add-init-rules $ rules)
-            (apply game/add-init-words $ words)
-            (eng/on-change $))
-    :base-scene (if text
-                  (update base-scene :objects conj (textbox text))
-                  base-scene)}))
+  ([raw] (level-from-raw nil raw))
+  ([n {:keys [text rules words objects objects*]}]
+   (map->Level
+    {:game (as-> (apply game/new-game objects) $
+             (apply game/add-init-rules $ rules)
+             (apply game/add-init-words $ words)
+             (if-not n $ (eng/add-listener $ :click (win-listener n)))
+             (if-not text
+               $
+               (game/conj-object
+                $ {:type :explanatory-text, :text text} {:pos [70 30]}))
+             (game/conj-object $ {:type :back-button} {:pos [10 30]})
+             (eng/add-listener $ :click back-listener)
+             (eng/on-change $))})))
 
 (def levels
   (->>
@@ -48,22 +69,23 @@
      :rules [["there" "is"]
              ["win" "when"]]
      :words ["are" "two" "a" "\"" "\"" "\"" "\"" "an" "pressed"]}]
-   (mapv level-from-raw)))
+   (into [] (map-indexed level-from-raw))))
+
+(def finished-game-level
+  (level-from-raw
+   {:text "You have finished the game!"
+    :rules [[]]
+    :words ["well" "done"]}))
 
 (defn gen-pos []
   (Math/round (rand 160000)))
 
-(defn unfit-pos [[x y]]
-  (let [unfit (fn [v cap]
-                (- v (/ cap 16)))
-        w (.-width r/canvas)
-        h (.-height r/canvas)]
-    [(unfit x w) (unfit y h)]))
+(defn unfit-pos [pos] pos)
 
 (defn fit-pos [pos]
   (let [factor (/ 3 4)
         fit (fn [v cap]
-              (+ (/ cap 16) (rem v (* factor cap))))
+              (rem v (* factor cap)))
         w (.-width r/canvas)
         h (.-height r/canvas)
         [x y] (if (vector? pos)
@@ -108,15 +130,24 @@
                    (r/obj-with-bindings
                     :font (-> theme/theme :game :rule :font)
                     :fillStyle (-> theme/theme :game :rule style))))
-       :victory (-> (r/text (if (:had props)
-                              "victory (had)"
-                              "victory (not had)"))
-                    (r/obj-with-bindings
-                     :font (-> theme/theme :game :victory :font)
-                     :fillStyle (-> theme/theme :game :victory
-                                    ((if (:had props)
-                                       :colour
-                                       :not-had-colour)))))
+       :victory (let [had (:had props)]
+                  (-> (r/text (if (:had props)
+                                "victory (click to continue)"
+                                "victory (not had)"))
+                      (r/obj-with-bindings
+                       :font (-> theme/theme :game :victory :font)
+                       :fillStyle (-> theme/theme :game :victory
+                                      ((if had
+                                         :colour
+                                         :not-had-colour))))))
+       :back-button (-> (r/text "back")
+                        (r/obj-with-bindings
+                         :font "20px sans"
+                         :fillStyle "#00ff00"))
+       :explanatory-text (-> (r/text (:text props))
+                             (r/obj-with-bindings
+                              :font "20px sans"
+                              :fillStyle "white"))
 
        (throw (ex-info "No renderer for type" {:type (:type props)})))
      translate-to-pos
@@ -157,8 +188,8 @@
                (-> game :properties :intrinsics (get rule-id))
                *game (atom game)
                widths (map text-width (add-spaces last-words))
-               word-poses (reductions + 0 widths)
-               y (* 50 (swap! counter inc))
+               word-poses (reductions + 30 widths)
+               y (* 100 (swap! counter inc))
                held (-> @state/state :screen :held :id)
                game @*game]
            (reduce
@@ -172,7 +203,7 @@
      (-> game :properties :prop-pair-to-ids (get [:type :rule])))))
 
 (defn set-scene! []
-  (let [{:keys [base-scene game]
+  (let [{:keys [game]
          {game-objects :objects} :game
          :as level} (-> @state/state :screen :level)
         game (place-rules game)
@@ -183,20 +214,22 @@
                 into
                 (comp (map (partial objects-for *game))
                       (filter identity))
-                game-objects)]
+                game-objects)
+        game @*game]
     (swap! state/state
            update
            :screen
            assoc
            :scene scene
-           :level (assoc level :game @*game))))
+           :level (assoc level :game game))))
 
 (defn level-changes [level]
   (update level :game eng/on-change))
 
 (defn check-changes! []
   (swap! state/state update-in [:screen :level] level-changes)
-  (set-scene!))
+  (set-scene!)
+  (screen/redraw))
 
 (defn on-click [evt]
   (let [clicked
@@ -205,13 +238,16 @@
                (map :id)
                (filter identity))
               (-> @state/state :screen :scene r/under-mouse))
-        clicked (disj clicked (-> @state/state :screen :just-moved))]
+        clicked (disj clicked (-> @state/state :screen :just-moved))
+        pre-game (-> @state/state :screen :level :game)]
     (when-some [[clicked-id] (seq clicked)]
       (swap! state/state update-in
              [:screen :level :game]
              eng/dispatch-event
              :click
              {:target clicked-id})
+      (when (-> @state/state :screen :level :game (not= pre-game))
+        (push-history! pre-game))
       (check-changes!))))
 
 (defn on-down [evt]
@@ -219,14 +255,11 @@
               (eduction
                (filter :id)
                (-> @state/state :screen :scene r/under-mouse))]
-    (swap! state/state update :screen assoc :held
-           (let [[ox oy] (map -
-                              (-> @state/state :screen :level :game atom
-                                  (pos-for! id)
-                                  fit-pos)
-                              @mouse/mouse)
-                 [sx sy] @mouse/mouse]
-             {:id id, :ox ox, :oy oy, :sx sx, :sy sy})))
+    (let [game (-> @state/state :screen :level :game)
+          [ox oy] (map - (fit-pos (pos-for! (atom game) id)) @mouse/mouse)
+          [sx sy] @mouse/mouse]
+      (swap! state/state update :screen assoc :held
+             {:id id, :ox ox, :oy oy, :sx sx, :sy sy, :pre-game game})))
   (when (-> @state/state :screen :just-moved)
     (swap! state/state update :screen dissoc :just-moved)))
 
@@ -237,7 +270,7 @@
   (transduce (map square) + xs))
 
 (defn on-up [evt]
-  (when-some [{:keys [sx sy id]} (-> @state/state :screen :held)]
+  (when-some [{:keys [sx sy id pre-game]} (-> @state/state :screen :held)]
     (swap! state/state update :screen dissoc :held)
     (let [game (-> @state/state :screen :level :game)
           dist-sq (apply eucl-sq (map - [sx sy] @mouse/mouse))]
@@ -306,8 +339,8 @@
                   game)
                 game)]
           (swap! state/state assoc-in [:screen :level :game] game))
-        (check-changes!)
-        (screen/redraw)))))
+        (push-history! pre-game)
+        (check-changes!)))))
 
 (defn on-move [evt]
   (when-some [{:keys [id ox oy]} (-> @state/state :screen :held)]
@@ -317,7 +350,31 @@
     (screen/redraw)))
 
 (defn load-level [id]
-  (nth levels id))
+  (nth levels id finished-game-level))
+
+(defn on-keydown [evt]
+  (let [key (.-key evt)]
+    (m/match [key
+              (or (.-ctrlKey evt) (.-metaKey evt))
+              (.-altKey evt)
+              (.-shiftKey evt)]
+      [(:or "z" "y") true _ _]
+      (let [[pop-key push-key]
+            (if (= key "z")
+              [:history :redo-history]
+              [:redo-history :history])]
+        (when-let [[popped & remaining] (seq (-> @state/state :screen pop-key))]
+          (swap! state/state update :screen
+                 (fn [screen]
+                   (let [game (-> screen :level :game)]
+                     (-> screen
+                         (update :level assoc :game popped)
+                         (assoc pop-key remaining)
+                         (update push-key conj game)))))
+          (set-scene!)
+          (screen/redraw)))
+
+      :else nil)))
 
 (defn level-state [id]
   (let [level (load-level id)]
@@ -325,6 +382,7 @@
               :level level}
      :listeners {:resize [set-scene!]
                  :click [on-click]
+                 :keydown [on-keydown]
                  :mousedown [on-down]
                  :mouseup [on-up]
                  :mousemove [on-move]}}))
@@ -343,11 +401,16 @@
                      (into [(r/obj-with-bindings r/fill :fillStyle (:background theme/theme))]
                            (map-indexed
                             (fn [i lvl]
-                              (ui/menu-button
-                               (str i)
-                               (fn [] (set-level! i))
-                               (* (inc (quot i 3)) 60)
-                               (* (inc (mod i 3)) 60))))
+                              (->
+                               (ui/menu-button
+                                (str i)
+                                (fn [] (set-level! i))
+                                50
+                                50
+                                (* (inc (quot i 3)) 60)
+                                (* (inc (mod i 3)) 60))
+                               (r/obj-with-bindings
+                                :textAlign "center"))))
                            levels))}
     :listeners {:click [ui/on-click]}})
   (screen/redraw))
