@@ -1,8 +1,7 @@
-(defproject semantic-construct "0.1.0-SNAPSHOT"
-  :description "FIXME: write this!"
-  :url "http://example.com/FIXME"
-  :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+(defproject semantic-construct "1.0.0"
+  :description "Semantic Construct is a puzzle game about building a world with words."
+  :url "https://github.com/eutro/semantic-construct"
+  :license {:name "MIT", :url "https://mit-license.org/"}
 
   :min-lein-version "2.9.1"
 
