@@ -6,6 +6,8 @@
             [semantic-construct.theme :as theme]
             [semantic-construct.render :as r]))
 
+(defn force-load [])
+
 (def logo (js/document.getElementById "logo"))
 (def default-state
   {:screen {:type :main-menu
