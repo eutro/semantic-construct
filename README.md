@@ -12,9 +12,11 @@ Semantic Construct is a puzzle game about building a world with words.
 You can play [here](https://eutro.github.io/semantic-construct).
 
 Rules are written in relatively simple and mostly correct English:
+
 ![Simple English](resources/public/screenshots/simple_english_tm.png)
 
 Drag around words to create and modify the very rules of the world:
+
 ![Helpful Hints](resources/public/screenshots/helpful_hints_tm.png)
 
 ## Setup
