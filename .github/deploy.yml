@@ -1,0 +1,49 @@
+name: Build ClojureScript
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Hash dependencies
+        run: echo "DEPS_HASH=$(lein deps :tree-data | sha256sum)" >> $GITHUB_ENV
+
+      - name: Cache Maven
+        uses: actions/cache@v2.1.5
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-lein-${{ env.DEPS_HASH }}
+
+      - name: Build ClojureScript
+        run: lein cljsbuild once prod
+
+      - name: Copy Files
+        run: |
+          mkdir ../out
+          mkdir ../out/resources
+          mkdir ../out/resources/public
+          cp -r resources/public/* ../out/resources/public
+
+      - name: Configure Git
+        run: |
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git config user.name "Automation"
+
+      - name: Commit Pages
+        run: |
+          git switch gh-pages
+          rm -r *
+          cp -r ../out/resources/public/* ./
+          git add -u
+          git add -v *
+          git diff --staged --quiet && echo "No changes." || git commit -a -v -m "Build Pages" && git push -v
