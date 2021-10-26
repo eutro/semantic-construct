@@ -7,4 +7,5 @@
 (defonce initialized
   (do
     (set! js/document.onmousemove update-mouse)
+    (set! js/document.ontouchmove update-mouse)
     true))
