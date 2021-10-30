@@ -205,9 +205,11 @@
            bb
            (->BB
             (- (Math/abs (.-actualBoundingBoxLeft text-metrics)))
-            (- (Math/abs (.-fontBoundingBoxAscent text-metrics)))
+            (- (Math/abs (or (.-fontBoundingBoxAscent text-metrics)
+                             (.-actualBoundingBoxAscent text-metrics))))
             (Math/abs (.-actualBoundingBoxRight text-metrics))
-            (Math/abs (.-fontBoundingBoxDescent text-metrics)))]
+            (Math/abs (or (.-fontBoundingBoxDescent text-metrics)
+                          (.-actualBoundingBoxDescent text-metrics))))]
         (->InCtxRenderObject
          bb
          identity-matrix
