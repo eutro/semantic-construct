@@ -31,7 +31,7 @@
   (fn [game {id :target}]
     (let [props (get-in game [:properties :id-to-props id])]
       (if (and (= (:type props) :victory)
-               (:had props))
+               (:legitimate props))
         (do (set-level! (inc n))
             (state/escape!))
         game))))
@@ -125,8 +125,8 @@
                    (r/obj-with-bindings
                     :font (-> theme/theme :game :rule :font)
                     :fillStyle (-> theme/theme :game :rule style))))
-       :victory (let [had (:had props)]
-                  (-> (r/text (if (:had props)
+       :victory (let [had (:legitimate props)]
+                  (-> (r/text (if had
                                 "victory (press to continue)"
                                 "fool's victory"))
                       (r/obj-with-bindings

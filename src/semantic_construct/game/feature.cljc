@@ -68,11 +68,11 @@
    (thing-by-types #{"win"}
                    #{"wins"}
                    #{:victory}
-                   :had false)
+                   :legitimate false)
    (thing-by-types #{"victory"}
                    #{"victories"}
                    #{:victory}
-                   :had false)])
+                   :legitimate false)])
 
 (def atn
   {:s {:s {:cats [[:RULES :e (fn [reg it] (assoc reg :val it)) nil]]},
@@ -109,18 +109,34 @@
                      :ctor {:type :word, :value it}})))]]}
     :e {:pop :q}}
 
+   :ADJECTIVE
+   {:s {:trans {"legitimate" [:pop (constantly [:legitimate true])]}}}
+
    :THING
-   {:s {:cats [[:QUOTED-THING :e (fn [reg it] (assoc reg :q it))]]
-        :dyn
-        (fn [reg]
-          {:trans
-           (into {}
-                 (mapcat
-                  (fn [{:keys [words], :as info}]
-                    (let [rhs [:pop (constantly info)]]
-                      (map (fn [word] [word rhs])
-                           (words (or (:count reg) (throw (ex-info "Unknown count for thing." {}))))))))
-                 things-that-exist)})},
+   {:s {:epsilons [[:s1 identity]]
+        :cats [[:ADJECTIVE :s1 (fn [reg it] (assoc reg :adj it))]]}
+    :s1 {:cats [[:QUOTED-THING :e (fn [reg it] (assoc reg :q it))]]
+         :dyn
+         (fn [{:keys [adj] :as reg}]
+           {:trans
+            (into {}
+                  (mapcat
+                   (fn [{:keys [words], :as info}]
+                     (let [info (if adj
+                                  (cond-> info
+                                    true (update
+                                          :product
+                                          (fn [product]
+                                            (into #{}
+                                                  (map (fn [sum] (conj sum adj)))
+                                                  product)))
+                                    (:ctor info) (update :ctor conj adj))
+                                  info)
+                           rhs [:pop (constantly info)]]
+                       (map (fn [word] [word rhs])
+                            (words (or (:count reg)
+                                       (throw (ex-info "Unknown count for thing." {}))))))))
+                  things-that-exist)})},
     :e {:pop :q}},
 
    :RULES {:s {:cats [[:THERE-IS :e (fn [reg it] (assoc reg :r it)) nil]
@@ -209,7 +225,7 @@
                    :pred (:cond reg)})}}
 
    :ACTION
-   {:s {:trans {"win" [:pop (constantly {:type :win})]}}},
+   {:s {:trans {"win" [:pop (constantly {:type :win})]}}}
 
    :PREFIX-CMP
    {:s {:trans {"less" [:than (fn [reg it] (assoc reg :cmp <))]
