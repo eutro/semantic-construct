@@ -9,6 +9,13 @@
 
 (defonce initialized
   (do
-    (set! js/document.onmousemove update-mouse)
-    (set! js/document.ontouchmove (comp update-mouse unwrap-touch))
+    (let [unwrapped (comp update-mouse unwrap-touch)]
+      (doseq [[evt listener]
+              [["mousedown" update-mouse]
+               ["mousemove" update-mouse]
+               ["mouseup" update-mouse]
+               ["touchstart" unwrapped]
+               ["touchmove" unwrapped]
+               ["touchend" unwrapped]]]
+        (js/document.addEventListener evt listener)))
     true))
