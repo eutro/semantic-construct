@@ -110,7 +110,8 @@
        :word (-> (r/text (:value props))
                  (r/obj-with-bindings
                   :font (-> theme/theme :game :rule :font)
-                  :fillStyle (-> theme/theme :game :rule :word-colour)))
+                  :fillStyle (-> theme/theme :game :rule :word-colour))
+                 (update :thunk (fn [thunk] (fn [] (update (thunk) :bb r/enlarge 10)))))
        :rule (let [held (-> @state/state :screen :held :id)
                    word (and held
                              (-> held id-to-props :type (= :word))
@@ -126,7 +127,7 @@
                     :fillStyle (-> theme/theme :game :rule style))))
        :victory (let [had (:had props)]
                   (-> (r/text (if (:had props)
-                                "victory (click to continue)"
+                                "victory (press to continue)"
                                 "fool's victory"))
                       (r/obj-with-bindings
                        :font (-> theme/theme :game :victory :font)
