@@ -23,6 +23,7 @@ body {
     position: relative;
     display: block;
     margin: auto;
+    touch-action: none;
 }
 
 .pixelated {
