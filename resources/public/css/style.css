@@ -9,6 +9,10 @@ body {
     margin: 0;
 }
 
+#logo {
+    color: #fff;
+}
+
 #canvas-holder {
     position: absolute;
     height: 100%;
